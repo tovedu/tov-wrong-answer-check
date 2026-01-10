@@ -9,22 +9,32 @@ type QuestionSlot = {
 
 export default function Home() {
   const [studentId, setStudentId] = useState('');
+  const [students, setStudents] = useState<{ name: string, id: string }[]>([]);
   const [week, setWeek] = useState('1');
   const [session, setSession] = useState('1');
   const [loading, setLoading] = useState(false);
   const [slots, setSlots] = useState<QuestionSlot[]>([]);
 
-  // Initialize slots
+  // Initialize slots and load students
   useEffect(() => {
-    // Basic structure 7 Readings, say 30 Vocabs max for now or dynamic?
-    // User said "Load blueprint via action=wrong_list (just to get slots)"
-    // If I can't fetch, I'll show default.
-    // For now, let's just generate static slots or fetch if user clicks "Load".
+    // Load Students
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch('/api/students');
+        const data = await res.json();
+        if (data.students && Array.isArray(data.students)) {
+          setStudents(data.students);
+        }
+      } catch (e) {
+        console.error("Failed to load students", e);
+      }
+    };
+    fetchStudents();
   }, []);
 
   const fetchBlueprint = async () => {
     if (!studentId) {
-      alert('Student ID is required');
+      alert('Please select a student first (학생을 선택해주세요)');
       return;
     }
     setLoading(true);
@@ -121,14 +131,29 @@ export default function Home() {
 
       <div className="bg-white p-6 rounded-lg shadow-sm mb-6 space-y-4 border border-gray-200">
         <div>
-          <label className="block text-sm font-medium mb-1">Student ID</label>
-          <input
-            type="text"
-            value={studentId}
-            onChange={e => setStudentId(e.target.value)}
-            className="w-full p-2 border rounded"
-            placeholder="Enter ID (e.g., tov001)"
-          />
+          <label className="block text-sm font-medium mb-1">Student</label>
+          {students.length > 0 ? (
+            <select
+              value={studentId}
+              onChange={e => setStudentId(e.target.value)}
+              className="w-full p-2 border rounded"
+            >
+              <option value="">-- Select Student --</option>
+              {students.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.id})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={studentId}
+              onChange={e => setStudentId(e.target.value)}
+              className="w-full p-2 border rounded"
+              placeholder="Loading students or Enter ID..."
+            />
+          )}
         </div>
 
         <div className="flex gap-4">

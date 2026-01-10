@@ -9,6 +9,10 @@ function doGet(e) {
         return getWrongList(params, output);
     }
 
+    if (action === 'get_student_list') {
+        return getStudentList(output);
+    }
+
     return output.setContent(JSON.stringify({ error: 'Invalid action' }));
 }
 
@@ -40,27 +44,12 @@ function getWrongList(params, output) {
 
     let wrongList = [];
 
-    // Basic filtering
-    // Columns: Timestamp, StudentID, Week, Session, WrongSlots (Comma separated)
-    // Wait, previous design was row per slot. Let's switch to row per submission for simpler "Exam Sheet" feeling?
-    // User asked for "Student ID and Wrong details".
-    // Let's stick to appending ONE row per submission with all wrong answers in one cell, 
-    // OR multiple rows.
-    // Multiple rows is better for data analysis. One row per submission is better for human readability if just checking status.
-    // Let's do: Add multiple rows (one per wrong slot) to maintain granularity, BUT handle it in one batch request.
-
-    // Actually, to make 'getWrongList' work with the new batch save, we need to read properly.
-    // If we save as multiple rows, reading is same as before.
-
-    // Let's stick to: One Row per Slot. But batch insert.
-
+    // Skip header
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
+        // Col 1: StudentID (index 1), Col 2: Week (index 2), Col 3: Session (index 3)
+        // Col 4: Q_Slot (index 4), Col 5: IsWrong (index 5)
         if (row[1] == studentId && row[2] == week && row[3] == session) {
-            // If we are just appending, we might duplicate.
-            // But for now, let's just return what we find.
-            // Ideally we should clear previous entries for this student/week/session before saving?
-            // No, "history" is safer.
             if (row[5] === true || row[5] === 'true') {
                 wrongList.push(row[4]);
             }
@@ -70,6 +59,25 @@ function getWrongList(params, output) {
     return output.setContent(JSON.stringify({ wrong_list: wrongList }));
 }
 
+function getStudentList(output) {
+    const sheet = getSheet('STUDENT_DB');
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+        return output.setContent(JSON.stringify({ students: [] }));
+    }
+
+    // Read A2:B
+    const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+
+    const students = data.map(row => ({
+        name: row[0],
+        id: row[1]
+    })).filter(s => s.name && s.id); // Filter empty rows
+
+    return output.setContent(JSON.stringify({ students: students }));
+}
+
 function saveWrongList(data, output) {
     const sheet = getSheet('WrongAnswers');
 
@@ -77,13 +85,8 @@ function saveWrongList(data, output) {
     const studentId = data.student_id;
     const week = data.week;
     const session = data.session;
-    const wrongSlots = data.wrong_list || []; // Array of strings ['R1', 'V2']
+    const wrongSlots = data.wrong_list || [];
 
-    // Optional: Clear previous entries for this exact session to avoid duplicates?
-    // Implementing "Delete old" is hard without unique IDs.
-    // Let's just append. The "latest" can be considered current.
-
-    // We will append multiple rows
     wrongSlots.forEach(slot => {
         sheet.appendRow([
             timestamp,
@@ -106,6 +109,10 @@ function getSheet(name) {
         if (name === 'WrongAnswers') {
             sheet.appendRow(['Timestamp', 'StudentID', 'Week', 'Session', 'Q_Slot', 'IsWrong']);
         }
+        if (name === 'STUDENT_DB') {
+            sheet.appendRow(['Name', 'ID']);
+        }
     }
     return sheet;
 }
+

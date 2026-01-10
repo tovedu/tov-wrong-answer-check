@@ -98,13 +98,22 @@ vercel
 1. Google Drive에서 새 스프레드시트 생성.
 2. `확장 프로그램` -> `Apps Script` 클릭.
 3. **중요:** 프로젝트의 파일 목록에 있는 `Code.gs` (또는 `코드.gs`)의 내용을 모두 지우고, 이 프로젝트 폴더에 있는 `GAS_CODE.js`의 내용을 복사해서 붙여넣으세요.
-4. `배포` -> `새 배포` 클릭.
+4. **시트 구성 (중요)**:
+   - 스프레드시트에 `STUDENT_DB`라는 이름의 시트를 만드세요.
+   - **A열**에 학생 이름, **B열**에 학생 ID를 입력하세요. (첫 줄은 제목으로 사용)
+   - 예시:
+     | Name | ID |
+     | :--- | :--- |
+     | 홍길동 | tov001 |
+     | 김철수 | tov002 |
+5. `배포` -> `새 배포` 클릭.
    - 유형: `웹 앱`
-   - 설명: `Initial Deploy`
+   - 설명: `Update for Student List`
    - 다음 사용자로서 실행: `나(웹 앱 소유자)`
    - 액세스 권한이 있는 사용자: `모든 사용자` (**필수**)
-5. `배포` 클릭 후 권한 승인.
-6. **웹 앱 URL**을 복사해두세요.
+6. `배포` 클릭 후 권한 승인.
+7. **웹 앱 URL**을 복사해두세요. (URL이 바뀌면 Vercel 환경변수도 다시 설정해야 합니다. '새 배포'를 할 때마다 URL이 바뀔 수 있으니 주의하세요. 보통은 '버전'만 올리고 URL은 유지할 수르도 있습니다.)
+   - **팁**: URL을 유지하려면 `새 배포` 대신 `배포 관리` -> 위쪽의 연필 아이콘 -> `버전`을 `새 버전`으로 선택 -> `배포`를 누르면 URL이 유지됩니다.
 
 ### 2-4. 환경 변수 설정
 배포가 완료되면 Google Apps Script 주소를 Vercel에 알려줘야 합니다.
@@ -112,7 +121,7 @@ vercel
 vercel env add GAS_WEBAPP_URL
 ```
 *   `Enter the value:` 라는 질문에 아래 주소를 복사해서 붙여넣고 엔터를 치세요.
-    `https://script.google.com/macros/s/AKfycbxSW7FHj-DpxQriEiaNTJsgFocFxFdVev1FyDmuZEcrBZSMPgEbiAbGN_yVGfpeS9P3/exec`
+    (자신의 웹 앱 URL)
 *   `Add to which environments?` -> `Production, Preview, Development` (모두 선택된 상태로 Enter)
 
 ### 2-5. 정식 배포 (Production)
