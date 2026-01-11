@@ -43,7 +43,7 @@ function doPost(e) {
 }
 
 function getWrongList(params, output) {
-    const sheet = getSheet('WrongAnswers');
+    const sheet = getSheet('ANSWER_LOG'); // Updated to read from new log
     const data = sheet.getDataRange().getValues();
 
     const studentId = params.student_id;
@@ -55,10 +55,11 @@ function getWrongList(params, output) {
     // Skip header
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        // Old Schema: Col 1: StudentID, Col 2: Week, Col 3: Session, Col 4: Q_Slot, Col 5: IsWrong
-        if (row[1] == studentId && row[2] == week && row[3] == session) {
-            if (row[5] === true || row[5] === 'true') {
-                wrongList.push(row[4]);
+        // Schema: 0: log, 1: date, 2: stu_id, 3: week, 4: session, 5: q_slot, 6: is_wrong
+        if (row[2] == studentId && row[3] == week && row[4] == session) {
+            // Check is_wrong (Col index 6)
+            if (row[6] === true || row[6] === 'true' || row[6] === 'TRUE') {
+                wrongList.push(row[5]); // q_slot
             }
         }
     }
@@ -138,22 +139,42 @@ function getStudentList(output) {
 }
 
 function saveWrongList(data, output) {
-    const sheet = getSheet('WrongAnswers');
+    const sheet = getSheet('ANSWER_LOG');
 
     const timestamp = new Date();
+    const dateStr = Utilities.formatDate(timestamp, "GMT+9", "yyyy-MM-dd HH:mm:ss");
     const studentId = data.student_id;
     const week = data.week;
     const session = data.session;
     const wrongSlots = data.wrong_list || [];
 
     wrongSlots.forEach(slot => {
+        // Schema:
+        // 0: log_id, 1: date, 2: student_id, 3: week, 4: session, 5: q_slot
+        // 6: is_wrong, 7: answer_value, 8: question_id, 9: passage_group, 10: area, 11: q_type, 12: inweek, 13: score
+
+        const logId = 'LOG_' + timestamp.getTime() + '_' + Math.floor(Math.random() * 1000);
+
+        // Simple inference for metadata based on slot name (e.g., R1 -> Reading, V1 -> Vocab)
+        let area = '';
+        if (slot.startsWith('R')) area = 'Reading';
+        if (slot.startsWith('V')) area = 'Vocabulary';
+
         sheet.appendRow([
-            timestamp,
-            studentId,
-            week,
-            session,
-            slot,
-            true // is_wrong
+            logId,          // log_id
+            dateStr,        // date
+            studentId,      // student_id
+            week,           // week
+            session,        // session
+            slot,           // q_slot
+            true,           // is_wrong
+            '',             // answer_value (unknown)
+            '',             // question_id
+            '',             // passage_group
+            area,           // area
+            '',             // q_type
+            '',             // inweek
+            ''              // score
         ]);
     });
 
