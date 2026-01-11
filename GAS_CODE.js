@@ -13,6 +13,14 @@ function doGet(e) {
         return getStudentList(output);
     }
 
+    if (action === 'get_analysis_data') {
+        return getAnalysisData(params, output);
+    }
+
+    if (action === 'video_generation_log') {
+        // Placeholder for future use or keeping existing structure if any
+    }
+
     return output.setContent(JSON.stringify({ error: 'Invalid action' }));
 }
 
@@ -47,8 +55,7 @@ function getWrongList(params, output) {
     // Skip header
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        // Col 1: StudentID (index 1), Col 2: Week (index 2), Col 3: Session (index 3)
-        // Col 4: Q_Slot (index 4), Col 5: IsWrong (index 5)
+        // Old Schema: Col 1: StudentID, Col 2: Week, Col 3: Session, Col 4: Q_Slot, Col 5: IsWrong
         if (row[1] == studentId && row[2] == week && row[3] == session) {
             if (row[5] === true || row[5] === 'true') {
                 wrongList.push(row[4]);
@@ -57,6 +64,58 @@ function getWrongList(params, output) {
     }
 
     return output.setContent(JSON.stringify({ wrong_list: wrongList }));
+}
+
+function getAnalysisData(params, output) {
+    // Schema based on user input:
+    // 0: log_id, 1: date, 2: student_id, 3: week, 4: session, 5: q_slot
+    // 6: is_wrong, 7: answer_value, 8: question_id, 9: passage_group, 10: area, 11: q_type, 12: inweek, 13: score
+
+    const sheet = getSheet('ANSWER_LOG');
+    const data = sheet.getDataRange().getValues();
+
+    const week = params.week;
+    const session = params.session;
+    const studentId = params.student_id; // Optional filter
+
+    // Skip header
+    const stats = {};
+    const studentsFound = new Set();
+
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const rWeek = row[3];
+        const rSession = row[4];
+        const rStudentId = row[2];
+        const rIsWrong = (row[6] === true || row[6] === 'true' || row[6] === 'TRUE');
+        const qSlot = row[5];
+
+        // Filter by Week/Session
+        if (rWeek == week && rSession == session) {
+            // Optional Student Filter
+            if (studentId && rStudentId != studentId) continue;
+
+            if (rIsWrong && qSlot) {
+                if (!stats[qSlot]) {
+                    stats[qSlot] = {
+                        slot: qSlot,
+                        count: 0,
+                        area: row[10] || '',
+                        type: row[11] || ''
+                    };
+                }
+                stats[qSlot].count++;
+            }
+        }
+    }
+
+    // Convert to array and sort
+    const result = Object.values(stats).sort((a, b) => b.count - a.count);
+
+    return output.setContent(JSON.stringify({
+        analysis: result,
+        meta: { week: week, session: session, student_id: studentId }
+    }));
 }
 
 function getStudentList(output) {
@@ -111,6 +170,9 @@ function getSheet(name) {
         }
         if (name === 'STUDENT_DB') {
             sheet.appendRow(['Name', 'ID']);
+        }
+        if (name === 'ANSWER_LOG') {
+            sheet.appendRow(['log_id', 'date', 'student_id', 'week', 'session', 'q_slot', 'is_wrong', 'answer_value', 'question_id', 'passage_group', 'area', 'q_type', 'inweek', 'score']);
         }
     }
     return sheet;

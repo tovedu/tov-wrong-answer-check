@@ -127,7 +127,12 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-8 max-w-2xl mx-auto bg-gray-50">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">TOV Wrong Answer Check</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">TOV Wrong Answer Check</h1>
+        <a href="/analysis" className="text-sm bg-gray-100 text-gray-700 px-3 py-2 rounded hover:bg-gray-200 transition-colors">
+          Go to Analysis &rarr;
+        </a>
+      </div>
 
       <div className="bg-white p-6 rounded-lg shadow-sm mb-6 space-y-4 border border-gray-200">
         <div>
