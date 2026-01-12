@@ -1,11 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { BookOpen, ArrowRight, ChevronDown, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
+
+  // Students State
+  const [students, setStudents] = useState<{ name: string, id: string }[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(true);
   const [studentId, setStudentId] = useState('');
 
   // Mode State
@@ -19,10 +23,34 @@ export default function Home() {
   const [week, setWeek] = useState('1');
   const [session, setSession] = useState('1');
 
+  // Fetch Students on Mount
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch('/api/students');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.students && Array.isArray(data.students)) {
+            setStudents(data.students);
+            // Optional: Pre-select first student if list is not empty
+            // if (data.students.length > 0) {
+            //     setStudentId(data.students[0].id);
+            // }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load students", error);
+      } finally {
+        setLoadingStudents(false);
+      }
+    };
+    fetchStudents();
+  }, []);
+
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentId.trim()) {
-      alert('학생 ID를 입력해주세요.');
+      alert('학생을 선택해주세요.');
       return;
     }
 
@@ -76,15 +104,30 @@ export default function Home() {
 
             <form onSubmit={handleStart} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700 ml-1">학생 ID</label>
+                <label className="text-sm font-bold text-slate-700 ml-1">학생 선택</label>
                 <div className="relative group">
-                  <input
-                    type="text"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                    placeholder="예: STU001"
-                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700 placeholder:text-slate-300 group-hover:bg-white"
-                  />
+                  {loadingStudents ? (
+                    <div className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-400 flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
+                      학생 목록 불러오는 중...
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        value={studentId}
+                        onChange={(e) => setStudentId(e.target.value)}
+                        className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700 appearance-none cursor-pointer hover:bg-white"
+                      >
+                        <option value="" disabled>학생을 선택해주세요</option>
+                        {students.map((student) => (
+                          <option key={student.id} value={student.id}>
+                            {student.name} ({student.id})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
                 </div>
               </div>
 
