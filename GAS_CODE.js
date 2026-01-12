@@ -282,12 +282,24 @@ function getSummary(params, output) {
                     }
                 }
 
-                qMeta[key] = {
+                const metaObj = {
                     type: qType,
                     area: qArea,
                     passage: finalPassageType,
                     raw_passage_group: pGroup
                 };
+
+                // Store with Raw/Local Session Key
+                qMeta[key] = metaObj;
+
+                // Store with Calculated Global Session Key (Dual Indexing Strategy)
+                // If DB has "1" for Week 2, but App sends "6", this bridge fixes it.
+                if (s <= 5 && w >= 1) {
+                    const globalS = (w - 1) * 5 + s;
+                    if (globalS !== s) {
+                        qMeta[`${w}-${globalS}-${q}`] = metaObj;
+                    }
+                }
 
                 // Aggregation
                 if (!isNaN(w) && w >= fromWeek && w <= toWeek) {
