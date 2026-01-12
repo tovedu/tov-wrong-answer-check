@@ -189,7 +189,12 @@ export default function Home() {
                     <div className="relative">
                       <select
                         value={week}
-                        onChange={(e) => setWeek(e.target.value)}
+                        onChange={(e) => {
+                          const newWeek = parseInt(e.target.value);
+                          setWeek(e.target.value);
+                          // Reset session to first of new week (Cumulative)
+                          setSession(String((newWeek - 1) * 5 + 1));
+                        }}
                         className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700 appearance-none cursor-pointer hover:bg-white"
                       >
                         {[1, 2, 3, 4, 5, 6, 7, 8].map(w => (
@@ -207,9 +212,11 @@ export default function Home() {
                         onChange={(e) => setSession(e.target.value)}
                         className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700 appearance-none cursor-pointer hover:bg-white"
                       >
-                        {[1, 2, 3, 4, 5].map(s => (
-                          <option key={s} value={s}>{s}회차</option>
-                        ))}
+                        {Array.from({ length: 5 }, (_, i) => {
+                          const w = parseInt(week);
+                          const s = (w - 1) * 5 + i + 1;
+                          return <option key={s} value={s}>{s}회차</option>;
+                        })}
                       </select>
                       <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
                     </div>

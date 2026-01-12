@@ -95,10 +95,11 @@ function InputContent() {
             let nextWeek = currentWeek;
             let nextSession = currentSession + 1;
 
-            if (nextSession > 5) {
-                nextWeek += 1;
-                nextSession = 1;
-            }
+            // If session exceeds the current week's range (e.g., Week 1 ends at 5, next is 6)
+            // Logic: Week 1: 1-5, Week 2: 6-10.
+            // If nextSession is 6, it belongs to Week 2.
+            // Formula: Week = Math.ceil(nextSession / 5)
+            nextWeek = Math.ceil(nextSession / 5);
 
             // Ask User
             if (confirm(`저장되었습니다! 🎉\n\n'확인'을 누르면 다음 회차(${nextWeek}주 ${nextSession}회) 입력으로 바로 이동합니다.\n'취소'를 누르면 현재 화면에 머무릅니다.`)) {

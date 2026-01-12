@@ -368,3 +368,57 @@ function getSheet(name) {
     }
     return sheet;
 }
+
+function getSessionBlueprint(e) {
+    const targetWeek = parseInt(e.parameter.week);
+    const targetSession = parseInt(e.parameter.session);
+
+    if (!targetWeek || !targetSession) {
+        return ContentService.createTextOutput(JSON.stringify({ error: 'Missing week or session' }))
+            .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const qDbSheet = ss.getSheetByName('QUESTION_DB');
+    if (!qDbSheet) return ContentService.createTextOutput(JSON.stringify({ questions: [] })).setMimeType(ContentService.MimeType.JSON);
+
+    const data = qDbSheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const idxWeek = findHeaderIndex(headers, ['week', '주차']);
+    const idxSession = findHeaderIndex(headers, ['session', '회차', '세션']);
+    const idxInWeek = findHeaderIndex(headers, ['inweek', '주차내회차', 'relative']);
+    const idxSlot = findHeaderIndex(headers, ['slot', '문항', '번호']);
+
+    if (idxWeek === -1 || idxSession === -1 || idxSlot === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ error: 'DB Headers not found' })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const questions = [];
+
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const w = parseInt(row[idxWeek]);
+        const s = parseInt(row[idxSession]);
+
+        // Robust logic: "Does this row belong to the requested session?"
+        // 1. Check strict cumulative session match
+        let match = (w === targetWeek && s === targetSession);
+
+        // 2. Fallback: Check relative session match IF supplied session is small (<=5)
+        if (!match && idxInWeek > -1 && targetSession <= 5) {
+            const inW = parseInt(row[idxInWeek]);
+            if (w === targetWeek && inW === targetSession) {
+                match = true;
+            }
+        }
+
+        if (match) {
+            questions.push(row[idxSlot]);
+        }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+        questions: questions
+    })).setMimeType(ContentService.MimeType.JSON);
+}
