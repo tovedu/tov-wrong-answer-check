@@ -27,6 +27,7 @@ export async function GET() {
         }
     } catch (error) {
         console.error('Failed to fetch students:', error);
-        return NextResponse.json({ error: 'Failed to fetch students', details: String(error) }, { status: 500 });
+        const userMessage = error instanceof Error ? error.message : String(error);
+        return NextResponse.json({ error: userMessage }, { status: 500 });
     }
 }
