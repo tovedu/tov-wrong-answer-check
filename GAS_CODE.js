@@ -6,7 +6,7 @@ function doGet(e) {
     output.setMimeType(ContentService.MimeType.JSON);
 
     if (action === 'ping') {
-        return output.setContent(JSON.stringify({ ok: true, action: 'ping', version: 'v2026-01-10-03' }));
+        return output.setContent(JSON.stringify({ ok: true, action: 'ping', version: 'v2026-01-12-02' }));
     }
 
     if (action === 'wrong_list') {
@@ -23,6 +23,10 @@ function doGet(e) {
 
     if (action === 'summary') {
         return getSummary(params, output);
+    }
+
+    if (action === 'getSessionBlueprint') {
+        return getSessionBlueprint(params, output);
     }
 
     return output.setContent(JSON.stringify({ error: 'Invalid action' }));
@@ -46,6 +50,58 @@ function doPost(e) {
     }
 }
 
+function getSessionBlueprint(params, output) {
+    const week = parseInt(params.week);
+    const session = params.session;
+
+    if (!week || !session) return output.setContent(JSON.stringify({ error: 'Missing params' }));
+
+    const sheet = getSheet('QUESTION_DB');
+    const data = sheet.getDataRange().getValues();
+
+    // Helper: Find column index
+    function findHeaderIndex(headers, keywords) {
+        for (let i = 0; i < headers.length; i++) {
+            const h = String(headers[i]).toLowerCase().replace(/_/g, '').replace(/ /g, '');
+            for (let k of keywords) {
+                if (h.includes(k)) return i;
+            }
+        }
+        return -1;
+    }
+
+    const headers = data[0];
+    const idxWeek = findHeaderIndex(headers, ['week', '주차']);
+    const idxSession = findHeaderIndex(headers, ['session', '회차', '세션']);
+    const idxSlot = findHeaderIndex(headers, ['slot', '문항', '번호', 'q_number']);
+
+    if (idxWeek === -1 || idxSession === -1 || idxSlot === -1) {
+        return output.setContent(JSON.stringify({ error: 'Invalid QUESTION_DB headers' }));
+    }
+
+    let questions = [];
+
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (row[idxWeek] == week && row[idxSession] == session) {
+            questions.push(row[idxSlot]);
+        }
+    }
+
+    // Sort conventionally: R1, R2... V1, V2...
+    questions.sort((a, b) => {
+        const aType = a.charAt(0);
+        const bType = b.charAt(0);
+        const aNum = parseInt(a.slice(1)) || 0;
+        const bNum = parseInt(b.slice(1)) || 0;
+
+        if (aType !== bType) return aType.localeCompare(bType);
+        return aNum - bNum;
+    });
+
+    return output.setContent(JSON.stringify({ questions: questions }));
+}
+
 function getSummary(params, output) {
     const studentId = params.student_id;
     const fromWeek = parseInt(params.from_week);
@@ -55,49 +111,85 @@ function getSummary(params, output) {
         return output.setContent(JSON.stringify({ error: 'Missing or invalid parameters' }));
     }
 
+    // Helper: Find column index by partial name match (case-insensitive)
+    function findHeaderIndex(headers, keywords) {
+        for (let i = 0; i < headers.length; i++) {
+            const h = String(headers[i]).toLowerCase().replace(/_/g, '').replace(/ /g, '');
+            for (let k of keywords) {
+                if (h.includes(k)) return i;
+            }
+        }
+        return -1;
+    }
+
     // 1. Load Data
     const answerSheet = getSheet('ANSWER_LOG');
     const answerData = answerSheet.getDataRange().getValues();
 
-    // QP: Question Params (Metadata)
-    const qDbSheet = getSheet('QUESTION_DB');
-    // Assume QP Headers: [Week, Session, Q_Slot, Type, Area, PassageGroup]
-    // If not exists, we use empty
-    let qMeta = {};
-    if (qDbSheet.getLastRow() > 1) {
-        const qData = qDbSheet.getDataRange().getValues();
-        // Skip header
-        for (let i = 1; i < qData.length; i++) {
-            const row = qData[i];
-            // Key: Week-Session-Slot (e.g., "1-1-R1")
-            const key = `${row[0]}-${row[1]}-${row[2]}`;
-            qMeta[key] = {
-                type: row[3],
-                area: row[4],
-                passage: row[5]
-            };
+    // 2. Load TEXT_DB (for Passage Type Info)
+    let textMeta = {};
+    const textSheet = getSheet('TEXT_DB');
+    if (textSheet.getLastRow() > 1) {
+        const tRows = textSheet.getDataRange().getValues();
+        const tHeaders = tRows[0];
+        const idxGroup = findHeaderIndex(tHeaders, ['passage_group', 'group', '지문그룹', '지문']);
+        const idxType = findHeaderIndex(tHeaders, ['text_type', 'type', '텍스트유형', '유형', '갈래']);
+
+        if (idxGroup > -1 && idxType > -1) {
+            for (let i = 1; i < tRows.length; i++) {
+                const grp = tRows[i][idxGroup];
+                const typ = tRows[i][idxType];
+                if (grp) textMeta[grp] = typ;
+            }
         }
     }
 
-    let totalQuestions = 0; // This usually requires knowing how many questions student ATTEMPTED. 
-    // For now, let's assume specific number per session or calc from logs if logged all attempts.
-    // BUT, the prompt implies "total_questions" in the summary. 
-    // If we only log WRONG answers, we can't know total attempted unless we know total potential questions in those weeks.
-    // Let's approximate: (to - from + 1) * 5 (sessions) * 15 (questions) ??
-    // OR just return 0 if unknown. 
-    // Let's assume standard: 5 sessions/week * 20 questions/session = 100/week.
+    // 3. Load QUESTION_DB (Metadata)
+    const qDbSheet = getSheet('QUESTION_DB');
+    let qMeta = {};
 
-    // Aggregation buckets
+    if (qDbSheet.getLastRow() > 1) {
+        const qRows = qDbSheet.getDataRange().getValues();
+        const qHeaders = qRows[0];
+
+        const idxWeek = findHeaderIndex(qHeaders, ['week', '주차']);
+        const idxSession = findHeaderIndex(qHeaders, ['session', '회차', '세션']);
+        const idxSlot = findHeaderIndex(qHeaders, ['slot', '문항', '번호', 'q_number']);
+        const idxType = findHeaderIndex(qHeaders, ['type', '유형', 'q_type']);
+        const idxArea = findHeaderIndex(qHeaders, ['area', '영역']);
+        const idxPassage = findHeaderIndex(qHeaders, ['passage', '지문', 'group']);
+
+        if (idxWeek > -1 && idxSession > -1 && idxSlot > -1) {
+            for (let i = 1; i < qRows.length; i++) {
+                const row = qRows[i];
+                const key = `${row[idxWeek]}-${row[idxSession]}-${row[idxSlot]}`;
+
+                const qType = idxType > -1 ? row[idxType] : 'Unknown';
+                const qArea = idxArea > -1 ? row[idxArea] : 'Unknown';
+                const pGroup = idxPassage > -1 ? row[idxPassage] : '';
+
+                const finalPassageType = textMeta[pGroup] || pGroup || 'Unknown';
+
+                qMeta[key] = {
+                    type: qType,
+                    area: qArea,
+                    passage: finalPassageType,
+                    raw_passage_group: pGroup
+                };
+            }
+        }
+    }
+
+    let totalQuestions = 0;
+    let wrongCount = 0;
+
     const byType = {};
     const byArea = {};
     const byPassage = {};
     const byWeek = {};
     const wrongList = [];
 
-    let wrongCount = 0;
-
-    // 2. Iterate Answer Log
-    // Schema: 0: log, 1: date, 2: stu_id, 3: week, 4: session, 5: q_slot, 6: is_wrong
+    // 4. Iterate Answer Log
     for (let i = 1; i < answerData.length; i++) {
         const row = answerData[i];
         const rStu = row[2];
@@ -109,23 +201,20 @@ function getSummary(params, output) {
         if (rStu === studentId && rWeek >= fromWeek && rWeek <= toWeek && isWrong) {
             wrongCount++;
 
-            // Resolve Metadata
             const key = `${rWeek}-${rSession}-${rSlot}`;
-            const meta = qMeta[key] || { type: 'Unknown', area: 'Unknown', passage: 'Unknown' };
+            let meta = qMeta[key];
 
-            // Fallback from log if meta missing (optional, based on your previous code)
-            // Log cols: 10: area, 11: q_type
-            if (meta.type === 'Unknown' && row[11]) meta.type = row[11];
-            if (meta.area === 'Unknown' && row[10]) meta.area = row[10];
+            if (!meta) {
+                meta = { type: 'Unknown', area: 'Unknown', passage: 'Unknown' };
+                if (String(rSlot).startsWith('R')) meta.area = '독해';
+                if (String(rSlot).startsWith('V')) meta.area = '어휘';
+                if (row[10]) meta.area = row[10];
+                if (row[11]) meta.type = row[11];
+            }
 
-            // Aggregates
-            // Type
             byType[meta.type] = (byType[meta.type] || 0) + 1;
-            // Area
             byArea[meta.area] = (byArea[meta.area] || 0) + 1;
-            // Passage
             byPassage[meta.passage] = (byPassage[meta.passage] || 0) + 1;
-            // Week
             byWeek[rWeek] = (byWeek[rWeek] || 0) + 1;
 
             wrongList.push({
@@ -139,12 +228,9 @@ function getSummary(params, output) {
         }
     }
 
-    // Estimate total questions (fixed logic for now: 25 questions * 5 sessions * weeks)
-    // Adjust this constant based on actual curriculum
-    const QUESTIONS_PER_WEEK = 35; // Example
+    const QUESTIONS_PER_WEEK = 35;
     totalQuestions = (toWeek - fromWeek + 1) * QUESTIONS_PER_WEEK;
 
-    // Helper to format arrays
     const formatObj = (obj, keyName) => Object.entries(obj)
         .map(([k, v]) => ({ [keyName]: k, count: v }))
         .sort((a, b) => b.count - a.count);
@@ -164,8 +250,6 @@ function getSummary(params, output) {
     return output.setContent(JSON.stringify(summary));
 }
 
-// ... (Rest of existing functions: getWrongList, getStudentList, getAnalysisData, saveWrongList, getSheet) ...
-
 function getWrongList(params, output) {
     const sheet = getSheet('ANSWER_LOG');
     const data = sheet.getDataRange().getValues();
@@ -176,7 +260,6 @@ function getWrongList(params, output) {
 
     let wrongList = [];
 
-    // Skip header
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
         if (row[2] == studentId && row[3] == week && row[4] == session) {
@@ -190,9 +273,6 @@ function getWrongList(params, output) {
 }
 
 function getAnalysisData(params, output) {
-    // Preserve existing logic or update as needed. 
-    // The user asked for "range" update previously, but now we have "summary".
-    // I will leave this separate for now as "summary" covers the dashboard needs.
     const sheet = getSheet('ANSWER_LOG');
     const data = sheet.getDataRange().getValues();
 
@@ -279,8 +359,7 @@ function getSheet(name) {
         if (name === 'STUDENT_DB') sheet.appendRow(['Name', 'ID']);
         if (name === 'ANSWER_LOG') sheet.appendRow(['log_id', 'date', 'student_id', 'week', 'session', 'q_slot', 'is_wrong', 'answer_value', 'question_id', 'passage_group', 'area', 'q_type', 'inweek', 'score']);
         if (name === 'QUESTION_DB') sheet.appendRow(['Week', 'Session', 'Q_Slot', 'Type', 'Area', 'PassageGroup']);
-        // Added QUESTION_DB creation for metadata
+        if (name === 'TEXT_DB') sheet.appendRow(['PassageGroup', 'TextType']);
     }
     return sheet;
 }
-
