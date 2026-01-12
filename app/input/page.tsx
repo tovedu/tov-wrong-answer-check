@@ -89,8 +89,22 @@ function InputContent() {
 
             if (!res.ok) throw new Error('Save failed');
 
-            alert('저장되었습니다!');
-            // Optional: Go back or stay
+            // Calculate Next Session Logic
+            const currentWeek = parseInt(week || '1');
+            const currentSession = parseInt(session || '1');
+            let nextWeek = currentWeek;
+            let nextSession = currentSession + 1;
+
+            if (nextSession > 5) {
+                nextWeek += 1;
+                nextSession = 1;
+            }
+
+            // Ask User
+            if (confirm(`저장되었습니다! 🎉\n\n'확인'을 누르면 다음 회차(${nextWeek}주 ${nextSession}회) 입력으로 바로 이동합니다.\n'취소'를 누르면 현재 화면에 머무릅니다.`)) {
+                router.push(`/input?student_id=${studentId}&week=${nextWeek}&session=${nextSession}`);
+            }
+
         } catch (error) {
             console.error(error);
             alert('저장에 실패했습니다.');
@@ -156,8 +170,8 @@ function InputContent() {
                                     key={q}
                                     onClick={() => toggleQuestion(q)}
                                     className={`aspect-square rounded-2xl font-bold text-lg transition-all duration-200 flex items-center justify-center border-2 ${selected.has(q)
-                                            ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-200 scale-105'
-                                            : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200 hover:text-indigo-500'
+                                        ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-200 scale-105'
+                                        : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200 hover:text-indigo-500'
                                         }`}
                                 >
                                     {q.replace('R', '')}
@@ -179,8 +193,8 @@ function InputContent() {
                                         key={q}
                                         onClick={() => toggleQuestion(q)}
                                         className={`aspect-square rounded-2xl font-bold text-lg transition-all duration-200 flex items-center justify-center border-2 ${selected.has(q)
-                                                ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-200 scale-105'
-                                                : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200 hover:text-indigo-500'
+                                            ? 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-200 scale-105'
+                                            : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200 hover:text-indigo-500'
                                             }`}
                                     >
                                         {q.replace('V', '')}
@@ -200,8 +214,8 @@ function InputContent() {
                                         key={q}
                                         onClick={() => toggleQuestion(q)}
                                         className={`p-4 rounded-2xl font-bold transition-all ${selected.has(q)
-                                                ? 'bg-rose-500 text-white shadow-lg'
-                                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                            ? 'bg-rose-500 text-white shadow-lg'
+                                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                                             }`}
                                     >
                                         {q}
