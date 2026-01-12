@@ -128,7 +128,7 @@ function getSummary(params, output) {
     const answerSheet = getSheet('ANSWER_LOG');
     const answerData = answerSheet.getDataRange().getValues();
     const answerHeaders = answerData[0];
-    const idxLogBook = findHeaderIndex(answerHeaders, ['book', '교재', '책']);
+    const idxLogBook = findHeaderIndex(answerHeaders, ['book_id', 'bookid', 'book', '교재', '책']);
     const idxLogWeek = 3; // Default
     const idxLogSession = 4; // Default
     const idxLogStudent = 2; // Default
@@ -173,7 +173,7 @@ function getSummary(params, output) {
         const idxType = findHeaderIndex(qHeaders, ['type', '유형']);
         const idxArea = findHeaderIndex(qHeaders, ['area', '영역']);
         const idxPassage = findHeaderIndex(qHeaders, ['passage', '지문', 'group']);
-        const idxBook = findHeaderIndex(qHeaders, ['book', '교재', '책']);
+        const idxBook = findHeaderIndex(qHeaders, ['book_id', 'bookid', 'book', '교재', '책']);
 
         if (idxWeek > -1 && idxSession > -1 && idxSlot > -1) {
             for (let i = 1; i < qRows.length; i++) {
@@ -332,7 +332,7 @@ function getWrongList(params, output) {
     const book = params.book; // New param
 
     const headers = data[0];
-    const idxBook = findHeaderIndex(headers, ['book', '교재', '책']);
+    const idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
 
     let wrongList = [];
     for (let i = 1; i < data.length; i++) {
@@ -374,7 +374,7 @@ function saveWrongList(data, output) {
     // If 'Book' column is missing, we might want to append it? Or let user add it. 
     // User task says "user will add column". We just try to find it.
 
-    let idxBook = findHeaderIndex(headers, ['book', '교재']);
+    let idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
     if (idxBook === -1) {
         // Fallback: If not found, maybe append to end? NO, let's not touch schema dynamically too much.
         // Just ignore book save if column missing, or save to a specific index if we want to force it.
@@ -440,24 +440,7 @@ function getStudentList(output) {
     return output.setContent(JSON.stringify({ students: students }));
 }
 
-function saveWrongList(data, output) {
-    const sheet = getSheet('ANSWER_LOG');
-    const timestamp = new Date();
-    const dateStr = Utilities.formatDate(timestamp, "GMT+9", "yyyy-MM-dd HH:mm:ss");
-    const studentId = data.student_id;
-    const week = data.week;
-    const session = data.session;
-    const wrongSlots = data.wrong_list || [];
 
-    wrongSlots.forEach(slot => {
-        const logId = 'LOG_' + timestamp.getTime() + '_' + Math.floor(Math.random() * 1000);
-        let area = '';
-        if (slot.startsWith('R')) area = 'Reading';
-        if (slot.startsWith('V')) area = 'Vocabulary';
-        sheet.appendRow([logId, dateStr, studentId, week, session, slot, true, '', '', '', area]);
-    });
-    return output.setContent(JSON.stringify({ success: true, count: wrongSlots.length }));
-}
 
 function getSheet(name) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -492,7 +475,7 @@ function getSessionBlueprint(e) {
     const idxSession = findHeaderIndex(headers, ['session', '회차', '세션']);
     const idxInWeek = findHeaderIndex(headers, ['inweek', '주차내회차', 'relative']);
     const idxSlot = findHeaderIndex(headers, ['slot', '문항', '번호']);
-    const idxBook = findHeaderIndex(headers, ['book', '교재', '책']);
+    const idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
 
     if (idxWeek === -1 || idxSession === -1 || idxSlot === -1) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'DB Headers not found' })).setMimeType(ContentService.MimeType.JSON);
