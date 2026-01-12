@@ -29,6 +29,10 @@ function doGet(e) {
         return getSessionBlueprint(params, output);
     }
 
+    if (action === 'get_book_list') {
+        return getBookList(output);
+    }
+
     return output.setContent(JSON.stringify({ error: 'Invalid action' }));
 }
 
@@ -188,9 +192,9 @@ function getSummary(params, output) {
         if (idxWeek > -1 && idxSession > -1 && idxSlot > -1) {
             for (let i = 1; i < qRows.length; i++) {
                 const row = qRows[i];
-                const w = parseInt(row[idxWeek]);
-                const s = row[idxSession];
-                const q = row[idxSlot];
+                const w = parseInt(String(row[idxWeek]).replace(/[^0-9]/g, ''));
+                const s = String(row[idxSession]).trim();
+                const q = String(row[idxSlot]).trim();
 
                 // Book Filter
                 const qBook = idxBook > -1 ? String(row[idxBook]).trim() : '';
@@ -198,8 +202,23 @@ function getSummary(params, output) {
 
                 const key = `${w}-${s}-${q}`;
 
-                const qType = idxType > -1 ? String(row[idxType]) : 'Unknown';
-                const qArea = idxArea > -1 ? String(row[idxArea]) : 'Unknown';
+                // User Request: 'Type' comes from 'Area' column in DB
+                // 'Area' (Reading/Vocab) should be derived from Slot ID (R/V)
+
+                let qArea = 'Unknown';
+                if (q.startsWith('R') || q.startsWith('독')) qArea = 'Reading';
+                else if (q.startsWith('V') || q.startsWith('어')) qArea = 'Vocabulary';
+                else if (idxArea > -1) {
+                    // Fallback to checking DB 'Type' column if Slot inference fails? 
+                    // No, user said 'Question Type' is in 'Area' col. 
+                    // Let's assume 'Area' column in DB holds the "Question Type" (Introduction, Inference, etc.)
+                    // So we shouldn't use it for 'Reading/Vocab' area.
+                    // Let's check 'Type' column for 'Reading/Vocab'?
+                    // Or just stick to Slot ID. Slot ID is safest.
+                }
+
+                const qType = idxArea > -1 ? String(row[idxArea]).trim() : 'Unknown'; // User: "유형 is QUESTION_DB area"
+
                 const pGroup = idxPassage > -1 ? String(row[idxPassage]).trim() : '';
 
                 // Resolve Passage Type: Try Book-Scoped first, then Global
@@ -210,7 +229,7 @@ function getSummary(params, output) {
                     } else if (textMeta[pGroup]) {
                         finalPassageType = textMeta[pGroup];
                     } else {
-                        finalPassageType = pGroup; // Fallback to group name itself if no mapping
+                        finalPassageType = pGroup; // Fallback
                     }
                 }
 
@@ -247,10 +266,10 @@ function getSummary(params, output) {
 
     for (let i = 1; i < answerData.length; i++) {
         const row = answerData[i];
-        const rStu = row[idxLogStudent];
-        const rWeek = parseInt(row[idxLogWeek]);
-        const rSession = row[idxLogSession];
-        const rSlot = row[5];
+        const rStu = String(row[idxLogStudent]).trim();
+        const rWeek = parseInt(String(row[idxLogWeek]).replace(/[^0-9]/g, ''));
+        const rSession = String(row[idxLogSession]).trim();
+        const rSlot = String(row[5]).trim();
         const isWrong = (row[6] === true || row[6] === 'true' || row[6] === 'TRUE');
 
         // Book Filter
@@ -532,4 +551,49 @@ function getSessionBlueprint(e) {
     return ContentService.createTextOutput(JSON.stringify({
         questions: questions
     })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getBookList(output) {
+    const sheet = getSheet('QUESTION_DB');
+    if (sheet.getLastRow() <= 1) {
+        // Fallback or empty
+        return output.setContent(JSON.stringify({ books: ["TOV-R1"] }));
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Helper to find index (copied from other funcs or we can make it global helper, but keeping standalone is safer for copy-paste)
+    const findIndex = (keys) => {
+        for (let i = 0; i < headers.length; i++) {
+            const h = String(headers[i]).toLowerCase().replace(/_/g, '').replace(/ /g, '');
+            for (let k of keys) {
+                if (h.includes(k)) return i;
+            }
+        }
+        return -1;
+    };
+
+    const idxBook = findIndex(['book_id', 'bookid', 'book', '교재', '책']);
+
+    // If no book column, return default
+    if (idxBook === -1) {
+        return output.setContent(JSON.stringify({ books: ["TOV-R1", "TOV-R2", "TOV-R3"] })); // Default fallback
+    }
+
+    const bookSet = new Set();
+    // Start from row 1 (data)
+    for (let i = 1; i < data.length; i++) {
+        const val = String(data[i][idxBook]).trim();
+        if (val) bookSet.add(val);
+    }
+
+    const books = Array.from(bookSet).sort();
+
+    // If empty found, add defaults?
+    if (books.length === 0) {
+        books.push("TOV-R1");
+    }
+
+    return output.setContent(JSON.stringify({ books: books }));
 }
