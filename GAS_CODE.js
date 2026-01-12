@@ -107,6 +107,7 @@ function getSummary(params, output) {
     const studentId = params.student_id;
     const fromWeek = parseInt(params.from_week);
     const toWeek = parseInt(params.to_week);
+    const targetBook = params.book; // New param
 
     if (!studentId || isNaN(fromWeek) || isNaN(toWeek)) {
         return output.setContent(JSON.stringify({ error: 'Missing parameters' }));
@@ -126,6 +127,11 @@ function getSummary(params, output) {
     // 1. Load Data
     const answerSheet = getSheet('ANSWER_LOG');
     const answerData = answerSheet.getDataRange().getValues();
+    const answerHeaders = answerData[0];
+    const idxLogBook = findHeaderIndex(answerHeaders, ['book', '교재', '책']);
+    const idxLogWeek = 3; // Default
+    const idxLogSession = 4; // Default
+    const idxLogStudent = 2; // Default
 
     // 2. Load TEXT_DB (Passage Metadata)
     let textMeta = {};
@@ -163,12 +169,11 @@ function getSummary(params, output) {
         const idxWeek = findHeaderIndex(qHeaders, ['week', '주차']);
         let idxSession = findHeaderIndex(qHeaders, ['session', '회차', '세션']);
         const idxInWeek = findHeaderIndex(qHeaders, ['inweek', '주차내회차', 'relative']);
-        if (idxInWeek > -1) idxSession = idxInWeek;
-
         const idxSlot = findHeaderIndex(qHeaders, ['slot', '문항', '번호']);
         const idxType = findHeaderIndex(qHeaders, ['type', '유형']);
         const idxArea = findHeaderIndex(qHeaders, ['area', '영역']);
         const idxPassage = findHeaderIndex(qHeaders, ['passage', '지문', 'group']);
+        const idxBook = findHeaderIndex(qHeaders, ['book', '교재', '책']);
 
         if (idxWeek > -1 && idxSession > -1 && idxSlot > -1) {
             for (let i = 1; i < qRows.length; i++) {
@@ -177,7 +182,13 @@ function getSummary(params, output) {
                 const s = row[idxSession];
                 const q = row[idxSlot];
 
-                const key = `${w}-${s}-${q}`;
+                // Book Filter
+                if (targetBook && idxBook > -1) {
+                    const b = String(row[idxBook]).trim();
+                    if (b && b !== targetBook) continue;
+                }
+
+                const key = `${w}-${s}-${q}`; // Note: Key might overlap if book not part of it, but since we filter by book, we only process ONE book's data, so no collision effectively in this request.
 
                 const qType = idxType > -1 ? String(row[idxType]) : 'Unknown';
                 const qArea = idxArea > -1 ? String(row[idxArea]) : 'Unknown';
@@ -198,7 +209,7 @@ function getSummary(params, output) {
 
                     if (qType) totalByType[qType] = (totalByType[qType] || 0) + 1;
                     if (qArea) totalByArea[qArea] = (totalByArea[qArea] || 0) + 1;
-                    if (pGroup) totalByPassage[pGroup] = (totalByPassage[pGroup] || 0) + 1; // Use raw group for passage accuracy
+                    if (pGroup) totalByPassage[pGroup] = (totalByPassage[pGroup] || 0) + 1;
 
                     const wKey = `${w}주차`;
                     totalByWeek[wKey] = (totalByWeek[wKey] || 0) + 1;
@@ -217,11 +228,17 @@ function getSummary(params, output) {
 
     for (let i = 1; i < answerData.length; i++) {
         const row = answerData[i];
-        const rStu = row[2];
-        const rWeek = parseInt(row[3]);
-        const rSession = row[4];
+        const rStu = row[idxLogStudent];
+        const rWeek = parseInt(row[idxLogWeek]);
+        const rSession = row[idxLogSession];
         const rSlot = row[5];
         const isWrong = (row[6] === true || row[6] === 'true' || row[6] === 'TRUE');
+
+        // Book Filter
+        if (targetBook && idxLogBook > -1) {
+            const b = String(row[idxLogBook]).trim();
+            if (b && b !== targetBook) continue;
+        }
 
         if (String(rStu) === String(studentId) && rWeek >= fromWeek && rWeek <= toWeek) {
             if (isWrong) {
@@ -236,7 +253,7 @@ function getSummary(params, output) {
                 const a = meta.area || 'Unknown';
                 wrongByArea[a] = (wrongByArea[a] || 0) + 1;
 
-                const p = meta.raw_passage_group || 'Unknown'; // Use raw group here
+                const p = meta.raw_passage_group || 'Unknown';
                 wrongByPassage[p] = (wrongByPassage[p] || 0) + 1;
 
                 const wKey = `${rWeek}주차`;
@@ -249,7 +266,7 @@ function getSummary(params, output) {
                     area: meta.area,
                     type: meta.type,
                     passage: meta.passage,
-                    date: row[1] // Date column
+                    date: row[1]
                 });
             }
         }
@@ -307,21 +324,106 @@ function getSummary(params, output) {
 }
 
 function getWrongList(params, output) {
-    // ... (unchanged helper reused if needed, but summary covers it)
     const sheet = getSheet('ANSWER_LOG');
     const data = sheet.getDataRange().getValues();
     const studentId = params.student_id;
     const week = params.week;
     const session = params.session;
+    const book = params.book; // New param
+
+    const headers = data[0];
+    const idxBook = findHeaderIndex(headers, ['book', '교재', '책']);
 
     let wrongList = [];
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        if (row[2] == studentId && row[3] == week && row[4] == session && (row[6] === true || row[6] === 'true')) {
+        // Match Stubent, Week, Session using hardcoded indices (2,3,4) for backward compatibility or use findHeaderIndex?
+        // Let's stick to existing indices for now to minimize breakage if user doesn't update sheets immediately, 
+        // BUT we need to check if 'Book' exists.
+
+        let match = (row[2] == studentId && row[3] == week && row[4] == session);
+
+        // If book param is provided AND book column exists, filter by it
+        if (match && book && idxBook > -1) {
+            match = (row[idxBook] === book);
+        }
+
+        if (match && (row[6] === true || row[6] === 'true')) {
             wrongList.push(row[5]);
         }
     }
     return output.setContent(JSON.stringify({ wrong_list: wrongList }));
+}
+
+function saveWrongList(data, output) {
+    const studentId = data.student_id;
+    const week = data.week;
+    const session = data.session;
+    const wrongSlots = data.wrong_list || [];
+    const book = data.book || ''; // New param
+
+    if (!studentId || !week || !session) {
+        return output.setContent(JSON.stringify({ error: 'Missing required parameters' }));
+    }
+
+    const sheet = getSheet('ANSWER_LOG');
+    const headers = sheet.getDataRange().getValues()[0];
+
+    // Ensure Headers
+    // We assume 2=student,3=week,4=session based on `getSheet` init default.
+    // If 'Book' column is missing, we might want to append it? Or let user add it. 
+    // User task says "user will add column". We just try to find it.
+
+    let idxBook = findHeaderIndex(headers, ['book', '교재']);
+    if (idxBook === -1) {
+        // Fallback: If not found, maybe append to end? NO, let's not touch schema dynamically too much.
+        // Just ignore book save if column missing, or save to a specific index if we want to force it.
+        // Let's assume user added it to Column A or H?
+        // Actually, let's try to find it. If not found, we can't save it.
+    }
+
+    const timestamp = new Date();
+    const dateStr = Utilities.formatDate(timestamp, "Asia/Seoul", "yyyy-MM-dd");
+
+    wrongSlots.forEach(slot => {
+        const logId = 'LOG_' + timestamp.getTime() + '_' + Math.floor(Math.random() * 1000);
+        let area = '';
+        if (slot.startsWith('R')) area = 'Reading';
+        if (slot.startsWith('V')) area = 'Vocabulary';
+
+        // Construct Row. Default columns: log_id(0), date(1), student(2), week(3), session(4), slot(5), is_wrong(6), ans(7), qid(8), pgroup(9), area(10), type(11)
+        // If Book column exists at idxBook, we need to insert it there. That's complex if row is array.
+        // EASIER: Let's assume standard appends.
+        // BUT `appendRow` takes an array. 
+        // If user added 'Book' at Column A, then log_id is B... indices shift!
+        // THIS IS RISKY.
+
+        // STRATEGY: Create an object-based row map if possible? standard GAS doesn't support that easily.
+        // HYBRID: We will append the standard stricture, AND if 'Book' header exists, we update that cell after? No, excessive API calls.
+
+        // BEST APPROACH: Read headers, build array of length matching headers, fill known slots.
+
+        let rowData = new Array(headers.length).fill('');
+
+        // Map known columns
+        const setCol = (keys, val) => {
+            const idx = findHeaderIndex(headers, keys);
+            if (idx > -1) rowData[idx] = val;
+        };
+
+        setCol(['log_id', 'id'], logId);
+        setCol(['date', '일자'], dateStr);
+        setCol(['student', '학생'], studentId);
+        setCol(['week', '주차'], week);
+        setCol(['session', '회차'], session);
+        setCol(['slot', '문항'], slot);
+        setCol(['wrong', '오답'], true);
+        setCol(['area', '영역'], area);
+        setCol(['book', '교재'], book); // Save Book!
+
+        sheet.appendRow(rowData);
+    });
+    return output.setContent(JSON.stringify({ success: true, count: wrongSlots.length }));
 }
 
 function getAnalysisData(params, output) {
@@ -334,7 +436,7 @@ function getStudentList(output) {
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) return output.setContent(JSON.stringify({ students: [] }));
     const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-    const students = data.map(r => ({ name: r[0], id: r[1] })).filter(s => s.name && s.id);
+    const students = data.map(r => ({ name: String(r[0]).trim(), id: String(r[1]).trim() })).filter(s => s.name && s.id);
     return output.setContent(JSON.stringify({ students: students }));
 }
 
@@ -372,6 +474,7 @@ function getSheet(name) {
 function getSessionBlueprint(e) {
     const targetWeek = parseInt(e.parameter.week);
     const targetSession = parseInt(e.parameter.session);
+    const targetBook = e.parameter.book; // New param
 
     if (!targetWeek || !targetSession) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'Missing week or session' }))
@@ -389,6 +492,7 @@ function getSessionBlueprint(e) {
     const idxSession = findHeaderIndex(headers, ['session', '회차', '세션']);
     const idxInWeek = findHeaderIndex(headers, ['inweek', '주차내회차', 'relative']);
     const idxSlot = findHeaderIndex(headers, ['slot', '문항', '번호']);
+    const idxBook = findHeaderIndex(headers, ['book', '교재', '책']);
 
     if (idxWeek === -1 || idxSession === -1 || idxSlot === -1) {
         return ContentService.createTextOutput(JSON.stringify({ error: 'DB Headers not found' })).setMimeType(ContentService.MimeType.JSON);
@@ -401,19 +505,24 @@ function getSessionBlueprint(e) {
         const w = parseInt(row[idxWeek]);
         const s = parseInt(row[idxSession]);
 
-        // Robust logic: "Does this row belong to the requested session?"
-        // 1. Check strict cumulative session match
-        let match = (w === targetWeek && s === targetSession);
+        // Check Book Match (if provided and column exists)
+        let bookMatch = true;
+        if (targetBook && idxBook > -1) {
+            const rowBook = String(row[idxBook]).trim(); // Compare trimmed strings
+            if (rowBook && rowBook !== targetBook) bookMatch = false;
+        }
 
-        // 2. Fallback: Check relative session match IF supplied session is small (<=5)
-        if (!match && idxInWeek > -1 && targetSession <= 5) {
-            const inW = parseInt(row[idxInWeek]);
-            if (w === targetWeek && inW === targetSession) {
-                match = true;
+        // Logic: Match if Week matches AND (Session matches OR InWeek matches)
+        let sessionMatch = false;
+        if (w === targetWeek) {
+            if (s === targetSession) sessionMatch = true; // Strict cumulative
+            else if (idxInWeek > -1 && targetSession <= 5) { // Fallback relative
+                const inW = parseInt(row[idxInWeek]);
+                if (inW === targetSession) sessionMatch = true;
             }
         }
 
-        if (match) {
+        if (bookMatch && sessionMatch) {
             questions.push(row[idxSlot]);
         }
     }

@@ -54,6 +54,7 @@ function ReportContent() {
     const studentId = searchParams.get('student_id');
     const fromWeek = searchParams.get('from');
     const toWeek = searchParams.get('to');
+    const book = searchParams.get('book');
 
     const [data, setData] = useState<SummaryData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -69,7 +70,7 @@ function ReportContent() {
 
         const fetchData = async () => {
             try {
-                const res = await fetch(`/api/summary?student_id=${studentId}&from=${fromWeek}&to=${toWeek}`);
+                const res = await fetch(`/api/summary?student_id=${studentId}&from=${fromWeek}&to=${toWeek}&book=${book || ''}`);
                 const json = await res.json();
 
                 if (!res.ok) {

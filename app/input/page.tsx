@@ -10,6 +10,7 @@ function InputContent() {
     const studentId = searchParams.get('student_id');
     const week = searchParams.get('week');
     const session = searchParams.get('session');
+    const book = searchParams.get('book'); // New param
 
     const [questions, setQuestions] = useState<string[]>([]);
     const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -26,7 +27,7 @@ function InputContent() {
                 // If API fails or returns empty, fallback to default R1-15, V1-20
                 let qList: string[] = [];
                 try {
-                    const bpRes = await fetch(`/api/blueprint?week=${week}&session=${session}`);
+                    const bpRes = await fetch(`/api/blueprint?week=${week}&session=${session}&book=${book || ''}`);
                     if (bpRes.ok) {
                         const bpData = await bpRes.json();
                         if (bpData.questions && Array.isArray(bpData.questions)) {
@@ -37,9 +38,9 @@ function InputContent() {
                     console.warn('Blueprint fetch failed, using default');
                 }
 
-                // Fallback if empty
+                // Fallback if empty (Only if no questions found at all)
                 if (qList.length === 0) {
-                    // Default Structure: R1-R15, V1-V25 (Adjust as needed)
+                    // ... existing fallback ...
                     const r = Array.from({ length: 15 }, (_, i) => `R${i + 1}`);
                     const v = Array.from({ length: 25 }, (_, i) => `V${i + 1}`);
                     qList = [...r, ...v];
@@ -47,7 +48,7 @@ function InputContent() {
                 setQuestions(qList);
 
                 // 2. Fetch Existing Wrong Answers
-                const wrongRes = await fetch(`/api/wrong?student_id=${studentId}&week=${week}&session=${session}`);
+                const wrongRes = await fetch(`/api/wrong?student_id=${studentId}&week=${week}&session=${session}&book=${book || ''}`);
                 if (wrongRes.ok) {
                     const wData = await wrongRes.json();
                     if (wData.wrong_list && Array.isArray(wData.wrong_list)) {
@@ -63,7 +64,7 @@ function InputContent() {
         };
 
         init();
-    }, [studentId, week, session]);
+    }, [studentId, week, session, book]);
 
     const toggleQuestion = (q: string) => {
         const next = new Set(selected);
@@ -83,6 +84,7 @@ function InputContent() {
                     student_id: studentId,
                     week: week,
                     session: session,
+                    book: book, // Save Book
                     wrong_list: Array.from(selected)
                 })
             });

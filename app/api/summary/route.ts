@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const student_id = searchParams.get('student_id');
     const from = searchParams.get('from');
     const to = searchParams.get('to');
+    const book = searchParams.get('book');
 
     if (!student_id || !from || !to) {
         return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
     targetUrl.searchParams.set('student_id', student_id);
     targetUrl.searchParams.set('from_week', from);
     targetUrl.searchParams.set('to_week', to);
+    if (book) targetUrl.searchParams.set('book', book);
 
     try {
         const response = await fetch(targetUrl.toString(), {

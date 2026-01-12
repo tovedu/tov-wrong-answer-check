@@ -23,6 +23,7 @@ export default function Home() {
   // Input Mode State
   const [week, setWeek] = useState('1');
   const [session, setSession] = useState('1');
+  const [book, setBook] = useState('TOV-R1');
 
   // Fetch Students on Mount
   useEffect(() => {
@@ -59,9 +60,9 @@ export default function Home() {
     }
 
     if (mode === 'report') {
-      router.push(`/report?student_id=${studentId}&from=${fromWeek}&to=${toWeek}`);
+      router.push(`/report?student_id=${studentId}&from=${fromWeek}&to=${toWeek}&book=${book}`);
     } else {
-      router.push(`/input?student_id=${studentId}&week=${week}&session=${session}`);
+      router.push(`/input?student_id=${studentId}&week=${week}&session=${session}&book=${book}`);
     }
   };
 
@@ -107,6 +108,23 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleStart} className="space-y-6">
+              {/* Book Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 ml-1">교재 선택</label>
+                <div className="relative">
+                  <select
+                    value={book}
+                    onChange={(e) => setBook(e.target.value)}
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700 appearance-none cursor-pointer hover:bg-white"
+                  >
+                    <option value="TOV-R1">TOV-R1 (기본)</option>
+                    <option value="TOV-R2">TOV-R2</option>
+                    <option value="TOV-R3">TOV-R3</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 ml-1">학생 선택</label>
                 <div className="relative group">
