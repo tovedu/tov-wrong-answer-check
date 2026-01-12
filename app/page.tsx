@@ -1,245 +1,126 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
-
-type QuestionSlot = {
-  slot: string; // "R1", "V1" etc
-  is_wrong: boolean;
-};
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { BookOpen } from 'lucide-react';
 
 export default function Home() {
+  const router = useRouter();
   const [studentId, setStudentId] = useState('');
-  const [students, setStudents] = useState<{ name: string, id: string }[]>([]);
-  const [week, setWeek] = useState('1');
-  const [session, setSession] = useState('1');
-  const [loading, setLoading] = useState(false);
-  const [slots, setSlots] = useState<QuestionSlot[]>([]);
+  const [fromWeek, setFromWeek] = useState('1');
+  const [toWeek, setToWeek] = useState('8');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Initialize slots and load students
-  useEffect(() => {
-    // Load Students
-    const fetchStudents = async () => {
-      try {
-        const res = await fetch('/api/students');
-        const data = await res.json();
-        if (data.students && Array.isArray(data.students)) {
-          setStudents(data.students);
-        }
-      } catch (e) {
-        console.error("Failed to load students", e);
-      }
-    };
-    fetchStudents();
-  }, []);
-
-  const fetchBlueprint = async () => {
-    if (!studentId) {
-      alert('Please select a student first (학생을 선택해주세요)');
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentId.trim()) {
+      alert('학생 ID를 입력해주세요.');
       return;
     }
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/wrong?week=${week}&session=${session}&student_id=${studentId}`);
-      if (!res.ok) throw new Error('Failed');
-      const data = await res.json();
-
-      // Expected data format from backend: { wrong_list: ["R1", "V3"], all_slots: ["R1"..."R7", "V1"..."V40"] }
-      // Or if backend just returns list of wrongs, I need to know the blueprint.
-      // User said: "Load blueprint via: ?action=wrong_list (just to get slots)"
-      // Let's assume the backend returns what IS wrong, and we need to simple generate the UI grid.
-      // I will generate default slots R1-R7 and V1-V40 (common max) if backend doesn't provide blueprint.
-      // But user said "Load blueprint". Let's try to trust the backend data.
-
-      // Mocking for safety if backend structure is unknown:
-      // assume data.data = { wrong: ['R1'], blueprint: ['R1', 'R2'...] }
-
-      let newSlots: QuestionSlot[] = [];
-      const r_count = 7;
-      const v_count = 40; // Default max?
-
-      const wrongSet = new Set(data.wrong_list || []); // array of slot strings
-
-      // Construct slots
-      // Reading
-      for (let i = 1; i <= r_count; i++) newSlots.push({ slot: `R${i}`, is_wrong: wrongSet.has(`R${i}`) });
-      // Vocab
-      for (let i = 1; i <= v_count; i++) newSlots.push({ slot: `V${i}`, is_wrong: wrongSet.has(`V${i}`) });
-
-      setSlots(newSlots);
-
-    } catch (e) {
-      alert('Loaded (fallback mode) or Failed');
-      // Fallback generation
-      let newSlots: QuestionSlot[] = [];
-      for (let i = 1; i <= 7; i++) newSlots.push({ slot: `R${i}`, is_wrong: false });
-      for (let i = 1; i <= 20; i++) newSlots.push({ slot: `V${i}`, is_wrong: false });
-      setSlots(newSlots);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleSlot = (slot: string, currentStatus: boolean) => {
-    // Just update local state
-    setSlots(prev => prev.map(s => s.slot === slot ? { ...s, is_wrong: !currentStatus } : s));
-  };
-
-  const saveWrongAnswers = async () => {
-    if (!studentId) {
-      alert('Student ID is required');
-      return;
-    }
-
-    const wrongList = slots.filter(s => s.is_wrong).map(s => s.slot);
-
-    // User might want to save "Check complete" even if empty?
-    // Let's allow saving empty list (clearing).
-
-    setLoading(true);
-    try {
-      const res = await fetch('/api/wrong', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'save_wrong_list', // Updated action
-          student_id: studentId,
-          week: week,
-          session: session,
-          wrong_list: wrongList
-        })
-      });
-
-      if (!res.ok) throw new Error('Failed to save');
-      const result = await res.json();
-
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      alert('Successfully Saved! (저장되었습니다)');
-    } catch (e) {
-      console.error(e);
-      alert('Failed to save. Please check your connection or GAS deployment.');
-    } finally {
-      setLoading(false);
-    }
+    setIsLoading(true);
+    router.push(`/report?student_id=${studentId}&from=${fromWeek}&to=${toWeek}`);
   };
 
   return (
-    <main className="min-h-screen p-8 max-w-2xl mx-auto bg-gray-50">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">TOV Wrong Answer Check</h1>
-        <a href="/analysis" className="text-sm bg-gray-100 text-gray-700 px-3 py-2 rounded hover:bg-gray-200 transition-colors">
-          Go to Analysis &rarr;
-        </a>
+    <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative overflow-hidden">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-200/30 rounded-full blur-3xl" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-200/30 rounded-full blur-3xl" />
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm mb-6 space-y-4 border border-gray-200">
-        <div>
-          <label className="block text-sm font-medium mb-1">Student</label>
-          {students.length > 0 ? (
-            <select
-              value={studentId}
-              onChange={e => setStudentId(e.target.value)}
-              className="w-full p-2 border rounded"
-            >
-              <option value="">-- Select Student --</option>
-              {students.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.id})
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              value={studentId}
-              onChange={e => setStudentId(e.target.value)}
-              className="w-full p-2 border rounded"
-              placeholder="Loading students or Enter ID..."
-            />
-          )}
+      <div className="bg-white/80 backdrop-blur-xl p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-lg border border-white/50 relative z-10 transition-all hover:shadow-blue-200/50 hover:scale-[1.005]">
+        <div className="text-center mb-10">
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/30 transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+            <BookOpen className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-2">TOV 국어 독해 진단</h1>
+          <p className="text-slate-500 font-medium">학생별 맞춤형 취약점 분석 매니저</p>
         </div>
 
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1">Week</label>
-            <select value={week} onChange={e => setWeek(e.target.value)} className="w-full p-2 border rounded">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700 ml-1">학생 ID</label>
+            <div className="relative group">
+              <input
+                type="text"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                placeholder="STU001"
+                className="w-full px-5 py-4 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium text-lg placeholder:text-slate-400"
+                autoFocus
+              />
+              <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-slate-200 pointer-events-none group-focus-within:ring-2 group-focus-within:ring-blue-500 transition-all" />
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1">Session</label>
-            <select value={session} onChange={e => setSession(e.target.value)} className="w-full p-2 border rounded">
-              {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-        </div>
 
-        <button
-          onClick={fetchBlueprint}
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 font-medium transition-colors"
-        >
-          {loading ? 'Loading...' : 'Load Exam Sheet'}
-        </button>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-700 ml-1">시작 주차</label>
+              <div className="relative">
+                <select
+                  value={fromWeek}
+                  onChange={(e) => setFromWeek(e.target.value)}
+                  className="w-full px-5 py-4 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none font-medium cursor-pointer"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((w) => (
+                    <option key={w} value={w}>{w}주차</option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                  <ChevronDownIcon />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-700 ml-1">종료 주차</label>
+              <div className="relative">
+                <select
+                  value={toWeek}
+                  onChange={(e) => setToWeek(e.target.value)}
+                  className="w-full px-5 py-4 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none font-medium cursor-pointer"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((w) => (
+                    <option key={w} value={w}>{w}주차</option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                  <ChevronDownIcon />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/30 disabled:opacity-70 disabled:cursor-not-allowed transform active:scale-[0.98] flex items-center justify-center gap-2 group"
+          >
+            {isLoading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>데이터 분석 중...</span>
+              </>
+            ) : (
+              <>
+                <span>분석 리포트 생성</span>
+                <span className="group-hover:translate-x-1 transition-transform">→</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-10 pt-6 border-t border-slate-100 text-center">
+          <p className="text-xs text-slate-400 font-medium">© 2026 TOV Education. All rights reserved.</p>
+        </div>
       </div>
-
-      {slots.length > 0 && (
-        <div className="space-y-6 pb-20">
-          <section>
-            <h2 className="text-lg font-semibold mb-3 text-gray-700">Reading (독해)</h2>
-            <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
-              {slots.filter(s => s.slot.startsWith('R')).map(s => (
-                <button
-                  key={s.slot}
-                  onClick={() => toggleSlot(s.slot, s.is_wrong)}
-                  className={`p-3 rounded border text-sm font-bold transition-colors ${s.is_wrong
-                    ? 'bg-red-500 text-white border-red-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
-                >
-                  {s.slot}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold mb-3 text-gray-700">Vocabulary (어휘)</h2>
-            <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
-              {slots.filter(s => s.slot.startsWith('V')).map(s => (
-                <button
-                  key={s.slot}
-                  onClick={() => toggleSlot(s.slot, s.is_wrong)}
-                  className={`p-2 rounded border text-xs font-bold transition-colors ${s.is_wrong
-                    ? 'bg-red-500 text-white border-red-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
-                >
-                  {s.slot}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-lg flex justify-center">
-            <button
-              onClick={saveWrongAnswers}
-              disabled={loading}
-              className="w-full max-w-2xl bg-green-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-green-700 shadow-md transition-colors"
-            >
-              {loading ? 'Saving...' : 'Save Wrong Answers (저장하기)'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!slots.length && (
-        <div className="mt-12 text-center text-gray-500">
-          Please enter Student ID and Load Exam Sheet.
-        </div>
-      )}
     </main>
   );
 }
+
+const ChevronDownIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
