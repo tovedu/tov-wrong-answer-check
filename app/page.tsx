@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, ArrowRight, ChevronDown, FileText, CheckCircle2 } from 'lucide-react';
+import { BookOpen, ArrowRight, ChevronDown, FileText, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
@@ -10,6 +10,7 @@ export default function Home() {
   // Students State
   const [students, setStudents] = useState<{ name: string, id: string }[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(true);
+  const [studentError, setStudentError] = useState('');
   const [studentId, setStudentId] = useState('');
 
   // Mode State
@@ -25,27 +26,30 @@ export default function Home() {
 
   // Fetch Students on Mount
   useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        const res = await fetch('/api/students');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.students && Array.isArray(data.students)) {
-            setStudents(data.students);
-            // Optional: Pre-select first student if list is not empty
-            // if (data.students.length > 0) {
-            //     setStudentId(data.students[0].id);
-            // }
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load students", error);
-      } finally {
-        setLoadingStudents(false);
-      }
-    };
     fetchStudents();
   }, []);
+
+  const fetchStudents = async () => {
+    setLoadingStudents(true);
+    setStudentError('');
+    try {
+      const res = await fetch('/api/students');
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `Server Error (${res.status})`);
+
+      if (json.students && Array.isArray(json.students)) {
+        setStudents(json.students);
+      } else {
+        throw new Error('Invalid data format received');
+      }
+    } catch (error: any) {
+      console.error("Failed to load students", error);
+      setStudentError(error.message || '학생 연동 실패');
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
 
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,6 +114,20 @@ export default function Home() {
                     <div className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-slate-400 flex items-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
                       학생 목록 불러오는 중...
+                    </div>
+                  ) : studentError ? (
+                    <div className="w-full px-5 py-3.5 bg-red-50 border-2 border-red-100 rounded-2xl text-red-500 flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 text-sm font-medium">
+                        <AlertCircle className="w-4 h-4" />
+                        {studentError}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={fetchStudents}
+                        className="p-1 hover:bg-red-100 rounded-full transition-colors"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
                     </div>
                   ) : (
                     <div className="relative">
