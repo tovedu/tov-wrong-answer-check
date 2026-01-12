@@ -1,39 +1,55 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    PieChart, Pie, Cell, LineChart, Line
+    PieChart, Pie, Cell, LineChart, Line, ReferenceLine
 } from 'recharts';
-import {
-    ChevronLeft, AlertTriangle, Target, BookOpen,
-    TrendingDown, FileText
-} from 'lucide-react';
+import { BookOpen, AlertTriangle, TrendingUp, Target, FileText, CheckCircle, Percent } from 'lucide-react';
 
-type SummaryData = {
+// --- Types ---
+interface SummaryData {
     student_id: string;
     total_questions: number;
-    wrong_count: number;
-    wrong_rate: number;
-    by_q_type: { q_type: string; count: number }[];
-    by_area: { area: string; count: number }[];
-    by_passage: { passage_group: string; count: number }[];
-    by_week: { week: number; count: number }[];
-    wrong_list: {
-        week: number;
-        session: number;
-        q_slot: string;
-        q_type: string;
-        area: string;
-        passage_group: string;
-    }[];
+    total_wrong: number;
+    overall?: {
+        accuracy: number;
+        reading_accuracy: number;
+        vocab_accuracy: number;
+    };
+    by_q_type?: any; // relaxed type to handle legacy object vs array
+    by_area?: any;
+    by_passage_group?: any;
+    by_week?: any;
+    wrong_list?: any[];
+}
+
+const COLORS = {
+    high: '#10B981', // Green >= 80
+    mid: '#F59E0B',  // Yellow 60-79
+    low: '#EF4444',  // Red < 60
+    neutral: '#94A3B8'
 };
 
-const COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6'];
+const getColor = (accuracy: any) => {
+    const score = Number(accuracy);
+    if (isNaN(score)) return COLORS.neutral;
+    if (score >= 80) return COLORS.high;
+    if (score >= 60) return COLORS.mid;
+    return COLORS.low;
+};
+
+// Helper to ensure array
+const toArray = (input: any): any[] => {
+    if (!input) return [];
+    if (Array.isArray(input)) return input;
+    // Handle legacy object format { "Reading": 10, ... } if necessary, or just return empty
+    // Ideally we assume if it's not array, it's unusable for our new charts
+    return [];
+};
 
 function ReportContent() {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const studentId = searchParams.get('student_id');
     const fromWeek = searchParams.get('from');
@@ -42,6 +58,11 @@ function ReportContent() {
     const [data, setData] = useState<SummaryData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
 
     useEffect(() => {
         if (!studentId) return;
@@ -55,14 +76,10 @@ function ReportContent() {
                     throw new Error(json.error || `Server Error (${res.status})`);
                 }
 
-                if (json.error) {
-                    throw new Error(json.error);
-                }
-
                 setData(json);
             } catch (err: any) {
-                setError(err.message || '알 수 없는 오류가 발생했습니다.');
                 console.error(err);
+                setError(err.message || '데이터를 불러오는데 실패했습니다.');
             } finally {
                 setLoading(false);
             }
@@ -71,117 +88,121 @@ function ReportContent() {
         fetchData();
     }, [studentId, fromWeek, toWeek]);
 
-    if (loading) {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-indigo-600 mb-4"></div>
-                <p className="text-slate-500 font-medium animate-pulse">데이터 분석 중...</p>
-            </div>
-        );
-    }
+    const getInsight = () => {
+        if (!data) return '';
 
-    if (error) {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-                <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-6">
-                    <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-                        <AlertTriangle className="w-10 h-10 text-red-500" />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">오류가 발생했습니다</h3>
-                        <p className="text-slate-500 break-keep">{error}</p>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl text-xs text-slate-400 font-mono text-left overflow-auto max-h-32 mb-4">
-                        Debug Info:<br />
-                        ID: {studentId}<br />
-                        Week: {fromWeek}~{toWeek}
-                    </div>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-transform active:scale-95"
-                    >
-                        다시 시도하기
-                    </button>
-                    <button
-                        onClick={() => router.push('/')}
-                        className="w-full py-3 text-slate-500 font-medium hover:text-slate-800 transition-colors"
-                    >
-                        홈으로 돌아가기
-                    </button>
+        const qTypes = toArray(data.by_q_type);
+        // Safe sort
+        const sortedTypes = [...qTypes].sort((a, b) => (Number(a.accuracy) || 0) - (Number(b.accuracy) || 0));
+        const weakType1 = sortedTypes[0];
+        const weakType2 = sortedTypes[1];
+
+        const groups = toArray(data.by_passage_group);
+        const lit = groups.find(p => p.passage_group && p.passage_group.includes('문학')) || { accuracy: 0 };
+        const nonLit = groups.find(p => p.passage_group && (p.passage_group.includes('독서') || p.passage_group.includes('비문학'))) || { accuracy: 0 };
+
+        const litAcc = Number(lit.accuracy) || 0;
+        const nonLitAcc = Number(nonLit.accuracy) || 0;
+        const comparison = litAcc > nonLitAcc ? '문학이 비문학보다 강점입니다.' : '비문학이 문학보다 강점입니다.';
+
+        if (!weakType1) return '아직 데이터가 충분하지 않습니다.';
+
+        return `
+            <span class="font-bold text-yellow-300">${studentId}</span> 학생은 
+            <span class="font-bold text-yellow-300">Week ${fromWeek}~${toWeek}</span> 동안<br/>
+            <span class="font-bold text-red-300">'${weakType1.q_type || '알 수 없음'}'</span> (${weakType1.accuracy || 0}%) 유형이 가장 취약합니다.<br/>
+            ${weakType2 ? `다음으로 <span class='text-red-200'>'${weakType2.q_type || '알 수 없음'}'</span> (${weakType2.accuracy || 0}%) 유형 보완이 필요하며,` : ''}
+            <br/>${comparison}
+        `;
+    };
+
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+        </div>
+    );
+
+    if (error) return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg w-full text-center border border-red-100">
+                <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <AlertTriangle className="w-10 h-10 text-red-500" />
                 </div>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">오류가 발생했습니다</h2>
+                <p className="text-slate-500 mb-8 font-medium">{error}</p>
+                <div className="bg-slate-50 p-4 rounded-xl text-left font-mono text-xs text-slate-400 mb-8 overflow-x-auto">
+                    Debug Tip: GAS 배포를 최신으로 업데이트 해주세요.
+                </div>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="w-full py-3.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors"
+                >
+                    다시 시도하기
+                </button>
             </div>
-        );
-    }
+        </div>
+    );
 
     if (!data) return null;
 
-    // Helper for AI Insight text
-    const getInsight = () => {
-        const topType = data.by_q_type[0];
-        const topArea = data.by_area[0];
-        const topPassage = data.by_passage[0];
-
-        const sentences = [];
-        if (topType) sentences.push(`주로 <span class="font-bold text-yellow-200">'${topType.q_type}'</span> 유형에서 오답이 빈번합니다.`);
-        if (topArea) sentences.push(`<span class="font-bold text-yellow-200">'${topArea.area}'</span> 영역에 대한 집중적인 학습이 필요합니다.`);
-        if (topPassage) sentences.push(`특히 <span class="font-bold text-yellow-200">'${topPassage.passage_group}'</span> 지문 독해 시 더욱 주의가 필요합니다.`);
-
-        return sentences.join(' ');
-    };
+    // Safe Accessors
+    const overall = data.overall || { accuracy: 0, reading_accuracy: 0, vocab_accuracy: 0 };
+    const qTypes = toArray(data.by_q_type);
+    const passageGroups = toArray(data.by_passage_group);
+    const weeks = toArray(data.by_week);
+    const wrongList = toArray(data.wrong_list);
 
     return (
-        <main className="min-h-screen bg-slate-50/50 p-4 md:p-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-50 via-slate-50 to-slate-100">
-            <div className="max-w-7xl mx-auto space-y-6">
+        <main className="min-h-screen bg-slate-50 p-4 md:p-8 font-nanum">
+            <div className="max-w-7xl mx-auto space-y-8">
                 {/* Header */}
-                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-6 rounded-3xl shadow-sm border border-slate-100 top-0 sticky z-50">
+                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
                     <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => router.back()}
-                            className="p-3 hover:bg-slate-100 rounded-2xl transition-all hover:scale-105 active:scale-95 group"
-                        >
-                            <ChevronLeft className="w-6 h-6 text-slate-500 group-hover:text-slate-800" />
+                        <button onClick={() => window.location.href = '/'} className="p-2 hover:bg-slate-50 rounded-xl transition-colors">
+                            <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                         </button>
                         <div>
-                            <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">
-                                {data.student_id} <span className="text-slate-300 font-light mx-1">|</span> 진단 리포트
+                            <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                                {studentId} <span className="text-slate-300">|</span> 학습 진단 리포트
                             </h1>
-                            <p className="text-slate-500 text-sm mt-1 flex items-center gap-2 font-medium">
-                                <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-bold">WEEK {fromWeek}-{toWeek}</span>
-                                종합 분석 결과
+                            <p className="text-sm font-bold text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full w-fit mt-1">
+                                WEEK {fromWeek}-{toWeek} <span className="text-slate-400 ml-1">종합 성취도 분석</span>
                             </p>
                         </div>
                     </div>
                 </header>
 
-                {/* KPI Cards */}
+                {/* KPI Cards (Section A) */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <KPICard
-                        label="총 풀이 문항"
-                        value={data.total_questions}
+                        label="독해 정답률"
+                        value={`${overall.reading_accuracy ?? 0}%`}
                         icon={BookOpen}
                         color="text-blue-600"
                         bg="bg-blue-50"
                         delay={1}
                     />
                     <KPICard
-                        label="총 오답 수"
-                        value={data.wrong_count}
-                        icon={AlertTriangle}
-                        color="text-red-500"
-                        bg="bg-red-50"
+                        label="어휘 정답률"
+                        value={`${overall.vocab_accuracy ?? 0}%`}
+                        icon={CheckCircle}
+                        color="text-green-600"
+                        bg="bg-green-50"
                         delay={2}
                     />
                     <KPICard
-                        label="오답률"
-                        value={`${(data.wrong_rate * 100).toFixed(1)}%`}
-                        icon={TrendingDown}
-                        color="text-emerald-500"
-                        bg="bg-emerald-50"
+                        label="취약 유형 1위"
+                        value={qTypes[0]?.q_type || '-'}
+                        subValue={qTypes[0] ? `${qTypes[0].accuracy}%` : ''}
+                        icon={AlertTriangle}
+                        color="text-red-500"
+                        bg="bg-red-50"
                         delay={3}
                     />
                     <KPICard
-                        label="취약 유형"
-                        value={data.by_q_type[0]?.q_type || '-'}
+                        label="취약 유형 2위"
+                        value={qTypes[1]?.q_type || '-'}
+                        subValue={qTypes[1] ? `${qTypes[1].accuracy}%` : ''}
                         icon={Target}
                         color="text-amber-500"
                         bg="bg-amber-50"
@@ -197,128 +218,148 @@ function ReportContent() {
                     </h2>
                     <p
                         className="text-lg md:text-xl leading-relaxed font-medium text-slate-100"
-                        dangerouslySetInnerHTML={{ __html: getInsight() || "데이터가 충분하지 않아 분석할 수 없습니다." }}
+                        dangerouslySetInnerHTML={{ __html: getInsight() }}
                     />
                 </div>
 
                 {/* Charts Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Weak Type Chart */}
-                    <ChartCard title="유형별 오답 분포" subtitle="가장 많이 틀린 문제 유형">
+
+                    {/* Skill Weakness Chart (Section B) */}
+                    <ChartCard title="유형별 성취도" subtitle="정답률 80% 이상 목표">
                         <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={data.by_q_type.slice(0, 5)} layout="vertical">
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" hide />
-                                    <YAxis
-                                        type="category"
-                                        dataKey="q_type"
-                                        width={100}
-                                        tick={{ fontSize: 12, fill: '#64748b' }}
-                                    />
-                                    <Tooltip
-                                        cursor={{ fill: '#f8fafc' }}
-                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                        formatter={(val: any) => [`${val}개`, '오답']}
-                                    />
-                                    <Bar dataKey="count" fill="#3B82F6" radius={[0, 4, 4, 0]} barSize={20} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                            {isClient && (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={qTypes} layout="vertical" margin={{ left: 10, right: 10 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                        <XAxis type="number" domain={[0, 100]} hide />
+                                        <YAxis
+                                            type="category"
+                                            dataKey="q_type"
+                                            width={80}
+                                            tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }}
+                                        />
+                                        <Tooltip
+                                            cursor={{ fill: '#f8fafc' }}
+                                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                            formatter={(val: any) => [`${val}%`, '정답률']}
+                                        />
+                                        <Bar dataKey="accuracy" radius={[0, 4, 4, 0]} barSize={16}>
+                                            {qTypes.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={getColor(entry?.accuracy)} />
+                                            ))}
+                                        </Bar>
+                                        <ReferenceLine x={80} stroke="#10B981" strokeDasharray="3 3" label={{ value: '목표', fill: '#10B981', fontSize: 10 }} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
                         </div>
                     </ChartCard>
 
-                    {/* Area Chart */}
-                    <ChartCard title="영역별 취약도" subtitle="독해 vs 어휘 오답 비율">
-                        <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={data.by_area}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={5}
-                                        dataKey="count"
-                                    >
-                                        {data.by_area.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend verticalAlign="bottom" height={36} />
-                                </PieChart>
-                            </ResponsiveContainer>
+                    {/* Lit vs Non-Lit (Section C) */}
+                    <ChartCard title="영역별 성취도 비교" subtitle="문학 vs 비문학(독서)">
+                        <div className="h-64 flex flex-col justify-center gap-6 px-4">
+                            {/* Custom Visualization for simple comparison */}
+                            {passageGroups
+                                .filter(p => !['Unknown', ''].includes(p.passage_group))
+                                .map((item, i) => (
+                                    <div key={i}>
+                                        <div className="flex justify-between text-sm font-bold text-slate-700 mb-1">
+                                            <span>{item.passage_group}</span>
+                                            <span className={`${(item.accuracy || 0) >= 80 ? 'text-green-600' : 'text-red-500'
+                                                }`}>{item.accuracy || 0}%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                                            <div
+                                                className="h-full rounded-full transition-all duration-1000 ease-out"
+                                                style={{
+                                                    width: `${item.accuracy || 0}%`,
+                                                    backgroundColor: getColor(item.accuracy)
+                                                }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                ))}
                         </div>
                     </ChartCard>
 
-                    {/* Weekly Trend */}
-                    <ChartCard title="주차별 오답 추이" subtitle="오답 수 변화 그래프">
+                    {/* Weekly Progress (Section D) */}
+                    <ChartCard title="주차별 성장 추이" subtitle="종합 정답률 변화">
                         <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={data.by_week}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="week" tickFormatter={w => `${w}주`} tick={{ fontSize: 12 }} />
-                                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                                    <Tooltip
-                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                        formatter={(val: any) => [`${val}개`, '오답']}
-                                    />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="count"
-                                        stroke="#8B5CF6"
-                                        strokeWidth={3}
-                                        dot={{ r: 4, fill: '#8B5CF6', strokeWidth: 2, stroke: '#fff' }}
-                                        activeDot={{ r: 6 }}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
+                            {isClient && (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={weeks} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis
+                                            dataKey="week"
+                                            tick={{ fontSize: 12 }}
+                                            tickFormatter={(value) => String(value).replace('주차', 'W')}
+                                        />
+                                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                                        <Tooltip
+                                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                            formatter={(val: any) => [`${val}%`, '정답률']}
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="accuracy"
+                                            stroke="#4F46E5"
+                                            strokeWidth={3}
+                                            dot={{ r: 4, fill: '#4F46E5', strokeWidth: 2, stroke: '#fff' }}
+                                            activeDot={{ r: 6 }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            )}
                         </div>
                     </ChartCard>
                 </div>
 
-                {/* Wrong Answer Table */}
+                {/* Detail Table (Section E) */}
                 <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
                     <div className="p-6 border-b border-slate-100">
                         <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-slate-400" />
+                            <FileText className="w-5 h-5 text-indigo-500" />
                             상세 오답 내역
                         </h3>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-slate-500 font-medium">
+                        <table className="w-full text-sm text-left text-slate-500">
+                            <thead className="text-xs text-slate-700 uppercase bg-slate-50">
                                 <tr>
+                                    <th className="px-6 py-4 rounded-tl-lg">일자</th>
                                     <th className="px-6 py-4">주차/회차</th>
                                     <th className="px-6 py-4">문항</th>
                                     <th className="px-6 py-4">영역</th>
                                     <th className="px-6 py-4">유형</th>
-                                    <th className="px-6 py-4">지문 갈래</th>
+                                    <th className="px-6 py-4 rounded-tr-lg">지문 갈래</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {data.wrong_list.map((item, i) => (
+                                {wrongList.map((item, i) => (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4 text-slate-400 font-mono text-xs">
+                                            {item.date ? String(item.date).substring(0, 10) : '-'}
+                                        </td>
                                         <td className="px-6 py-4 font-medium text-slate-900">
                                             {item.week}주차-{item.session}회
                                         </td>
                                         <td className="px-6 py-4 font-bold text-red-500">
-                                            {item.q_slot}
+                                            {item.slot}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.area === '독해' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.area === 'Reading' || item.area === '독해' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
                                                 {item.area}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-slate-600">{item.q_type}</td>
-                                        <td className="px-6 py-4 text-slate-600">{item.passage_group}</td>
+                                        <td className="px-6 py-4 text-slate-600">{item.type}</td>
+                                        <td className="px-6 py-4 text-slate-600">{item.passage}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
-                    {data.wrong_list.length === 0 && (
+                    {wrongList.length === 0 && (
                         <div className="p-12 text-center text-slate-400">
                             오답 내역이 없습니다. (완벽합니다! 🎉)
                         </div>
@@ -332,13 +373,14 @@ function ReportContent() {
 interface KPICardProps {
     label: string;
     value: string | number;
+    subValue?: string;
     icon: React.ElementType;
     color: string;
     bg: string;
     delay: number;
 }
 
-function KPICard({ label, value, icon: Icon, color, bg, delay }: KPICardProps) {
+function KPICard({ label, value, subValue, icon: Icon, color, bg, delay }: KPICardProps) {
     return (
         <div
             className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-5 hover:shadow-lg transition-all hover:-translate-y-1 group"
@@ -349,7 +391,10 @@ function KPICard({ label, value, icon: Icon, color, bg, delay }: KPICardProps) {
             </div>
             <div>
                 <p className="text-sm font-semibold text-slate-400 mb-0.5">{label}</p>
-                <p className="text-2xl font-extrabold text-slate-800 tracking-tight">{value}</p>
+                <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-extrabold text-slate-800 tracking-tight">{value}</p>
+                    {subValue && <span className="text-sm font-bold text-red-500">{subValue}</span>}
+                </div>
             </div>
         </div>
     );
@@ -378,7 +423,7 @@ function ChartCard({ title, subtitle, children }: ChartCardProps) {
 
 export default function ReportPage() {
     return (
-        <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
+        <Suspense fallback={<div>Loading...</div>}>
             <ReportContent />
         </Suspense>
     );
