@@ -106,8 +106,8 @@ function getSessionBlueprint(params, output) {
 
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        const w = parseInt(row[idxWeek]);
-        const s = parseInt(row[idxSession]); // This assumes strict session matching usually
+        const w = parseInt(String(row[idxWeek]).replace(/[^0-9]/g, ''));
+        const s = parseInt(String(row[idxSession]).replace(/[^0-9]/g, '')); // Robust parsing
 
         // Check Book Match (if provided and column exists)
         let bookMatch = true;
@@ -238,7 +238,7 @@ function getSummary(params, output) {
 
                 let s;
                 if (rawS !== '' && rawS !== null) {
-                    s = String(rawS).trim();
+                    s = String(rawS).replace(/[^0-9]/g, ''); // Robust: "1회" -> "1"
                     if (s) lastSession = s;
                 } else {
                     s = lastSession;
@@ -316,7 +316,7 @@ function getSummary(params, output) {
         const row = answerData[i];
         const rStu = String(row[idxLogStudent]).trim();
         const rWeek = parseInt(String(row[idxLogWeek]).replace(/[^0-9]/g, ''));
-        const rSession = String(row[idxLogSession]).trim();
+        const rSession = String(row[idxLogSession]).replace(/[^0-9]/g, ''); // Robust match
         const rSlot = String(row[5]).trim();
         const isWrong = (row[6] === true || row[6] === 'true' || row[6] === 'TRUE');
 
