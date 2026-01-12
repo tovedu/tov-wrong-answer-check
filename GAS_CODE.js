@@ -190,15 +190,53 @@ function getSummary(params, output) {
         const idxBook = findHeaderIndex(qHeaders, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
 
         if (idxWeek > -1 && idxSession > -1 && idxSlot > -1) {
+            // Fill-down Cache
+            let lastWeek = null;
+            let lastSession = null;
+            let lastBook = '';
+
             for (let i = 1; i < qRows.length; i++) {
                 const row = qRows[i];
-                const w = parseInt(String(row[idxWeek]).replace(/[^0-9]/g, ''));
-                const s = String(row[idxSession]).trim();
+
+                // 1. Raw Values
+                let rawW = row[idxWeek];
+                let rawS = row[idxSession];
+                let rawBook = idxBook > -1 ? String(row[idxBook]).trim() : '';
+
+                // 2. Fill-Down Logic (Handle Merged Cells/Empty Cells)
+                // Week
+                let w;
+                if (rawW !== '' && rawW !== null) {
+                    w = parseInt(String(rawW).replace(/[^0-9]/g, ''));
+                    if (!isNaN(w)) lastWeek = w;
+                } else {
+                    w = lastWeek;
+                }
+
+                // Session
+                let s;
+                if (rawS !== '' && rawS !== null) {
+                    s = String(rawS).trim();
+                    if (s) lastSession = s;
+                } else {
+                    s = lastSession;
+                }
+
+                // Book
+                let validBook = rawBook;
+                if (rawBook) {
+                    lastBook = rawBook;
+                } else {
+                    validBook = lastBook;
+                }
+
                 const q = String(row[idxSlot]).trim();
 
-                // Book Filter
-                const qBook = idxBook > -1 ? String(row[idxBook]).trim() : '';
-                if (targetBook && qBook && qBook !== targetBook) continue;
+                // Skip invalid rows (must have Week, Session, Slot)
+                if (!w || !s || !q) continue;
+
+                // Book Filter (Using filled-down book)
+                if (targetBook && validBook && validBook !== targetBook) continue;
 
                 const key = `${w}-${s}-${q}`;
 
