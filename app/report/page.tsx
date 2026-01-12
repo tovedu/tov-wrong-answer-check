@@ -118,25 +118,20 @@ function ReportContent() {
     };
 
     if (loading) return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
         </div>
     );
 
     if (error) return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg w-full text-center border border-red-100">
-                <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <AlertTriangle className="w-10 h-10 text-red-500" />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">오류가 발생했습니다</h2>
-                <p className="text-slate-500 mb-8 font-medium">{error}</p>
-                <div className="bg-slate-50 p-4 rounded-xl text-left font-mono text-xs text-slate-400 mb-8 overflow-x-auto">
-                    Debug Tip: GAS 배포를 최신으로 업데이트 해주세요.
-                </div>
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+            <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full text-center">
+                <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <h2 className="text-xl font-bold text-slate-800 mb-2">데이터를 불러오지 못했습니다</h2>
+                <p className="text-slate-500 mb-6">{error}</p>
                 <button
                     onClick={() => window.location.reload()}
-                    className="w-full py-3.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors"
+                    className="px-6 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors"
                 >
                     다시 시도하기
                 </button>
