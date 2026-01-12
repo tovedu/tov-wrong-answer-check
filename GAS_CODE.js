@@ -337,7 +337,10 @@ function getSummary(params, output) {
             if (b && b !== targetBook) continue;
         }
 
-        if (String(rStu) === String(studentId) && rWeek >= fromWeek && rWeek <= toWeek) {
+        // Robust Student ID Match (Case-insensitive)
+        const normalize = (s) => String(s).toLowerCase().replace(/ /g, ''); // Remove all spaces
+
+        if (normalize(rStu) === normalize(studentId) && rWeek >= fromWeek && rWeek <= toWeek) {
             if (isWrong) {
                 wrongCount++;
 
@@ -427,7 +430,9 @@ function getWrongList(params, output) {
     let wrongList = [];
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        let match = (row[2] == studentId && row[3] == week && row[4] == session);
+
+        const normalize = (s) => String(s).toLowerCase().replace(/ /g, '');
+        let match = (normalize(row[2]) == normalize(studentId) && row[3] == week && row[4] == session);
 
         if (match && book && idxBook > -1) {
             match = (row[idxBook] === book);
