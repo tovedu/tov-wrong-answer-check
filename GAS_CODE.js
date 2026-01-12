@@ -329,6 +329,9 @@ function getSummary(params, output) {
     // Debug Stats
     const debug = {
         matched_rows: 0,
+        skipped_by_book: 0,
+        skipped_by_student: 0,
+        skipped_by_week: 0,
         unmatched_data: []
     };
 
@@ -341,49 +344,66 @@ function getSummary(params, output) {
             const rSlot = idxLogSlot > -1 ? String(row[idxLogSlot]).trim() : String(row[5]).trim(); // Fallback to 5
             const isWrong = (row[idxLogWrong] === true || row[idxLogWrong] === 'true' || row[idxLogWrong] === 'TRUE');
 
+            // Book Filter Debugging
             if (targetBook && idxLogBook > -1) {
                 const b = String(row[idxLogBook]).trim();
-                if (b && b !== targetBook) continue;
+                // Compare with loose matching if needed, but strictly for now
+                if (b && b !== targetBook) {
+                    debug.skipped_by_book++;
+                    continue;
+                }
             }
 
-            // Robust Student ID Match (Case-insensitive)
+            // Robust Student ID Match
             const normalize = (s) => String(s).toLowerCase().replace(/ /g, '');
 
-            if (normalize(rStu) === normalize(studentId) && rWeek >= fromWeek && rWeek <= toWeek) {
-                debug.matched_rows++;
-
-                if (isWrong) {
-                    wrongCount++;
-
-                    const key = `${rWeek}-${rSession}-${rSlot}`;
-                    const meta = qMeta[key] || { type: 'Unknown', area: 'Unknown', raw_passage_group: 'Unknown', passage: 'Unknown' };
-
-                    if (meta.type === 'Unknown') {
-                        debug.unmatched_data.push(key); // Log missing keys
-                    }
-
-                    const t = meta.type || 'Unknown';
-                    wrongByType[t] = (wrongByType[t] || 0) + 1;
-
-                    const a = meta.area || 'Unknown';
-                    wrongByArea[a] = (wrongByArea[a] || 0) + 1;
-
-                    const p = meta.raw_passage_group || 'Unknown';
-                    wrongByPassage[p] = (wrongByPassage[p] || 0) + 1;
-
-                    const wKey = `${rWeek}주차`;
-                    wrongByWeek[wKey] = (wrongByWeek[wKey] || 0) + 1;
-
-                    wrongList.push({
-                        week: rWeek,
-                        session: rSession,
-                        slot: rSlot,
-                        area: meta.area,
-                        type: meta.type,
-                        passage: meta.passage,
-                        date: row[1]
-                    });
+            if (normalize(rStu) !== normalize(studentId)) {
+                if (normalize(rStu).includes(normalize(studentId))) {
+                    // near match?
                 }
+                debug.skipped_by_student++;
+                continue;
+            }
+
+            if (rWeek < fromWeek || rWeek > toWeek) {
+                debug.skipped_by_week++;
+                continue;
+            }
+
+            // If we reached here, it's a match!
+            debug.matched_rows++;
+
+            if (isWrong) {
+                wrongCount++;
+
+                const key = `${rWeek}-${rSession}-${rSlot}`;
+                const meta = qMeta[key] || { type: 'Unknown', area: 'Unknown', raw_passage_group: 'Unknown', passage: 'Unknown' };
+
+                if (meta.type === 'Unknown') {
+                    debug.unmatched_data.push(key); // Log missing keys
+                }
+
+                const t = meta.type || 'Unknown';
+                wrongByType[t] = (wrongByType[t] || 0) + 1;
+
+                const a = meta.area || 'Unknown';
+                wrongByArea[a] = (wrongByArea[a] || 0) + 1;
+
+                const p = meta.raw_passage_group || 'Unknown';
+                wrongByPassage[p] = (wrongByPassage[p] || 0) + 1;
+
+                const wKey = `${rWeek}주차`;
+                wrongByWeek[wKey] = (wrongByWeek[wKey] || 0) + 1;
+
+                wrongList.push({
+                    week: rWeek,
+                    session: rSession,
+                    slot: rSlot,
+                    area: meta.area,
+                    type: meta.type,
+                    passage: meta.passage,
+                    date: row[1]
+                });
             }
         }
     }
@@ -522,24 +542,35 @@ function getStudentList(output) {
 }
 
 function getBookList(output) {
-    const sheet = getSheet('QUESTION_DB');
-    if (sheet.getLastRow() <= 1) {
-        return output.setContent(JSON.stringify({ books: ["TOV-R1"] }));
-    }
-
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-
-    const idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
-
-    if (idxBook === -1) {
-        return output.setContent(JSON.stringify({ books: ["TOV-R1", "TOV-R2", "TOV-R3"] }));
-    }
-
+    // Union of QUESTION_DB and ANSWER_LOG books
     const bookSet = new Set();
-    for (let i = 1; i < data.length; i++) {
-        const val = String(data[i][idxBook]).trim();
-        if (val) bookSet.add(val);
+
+    // 1. QUESTION_DB
+    const qSheet = getSheet('QUESTION_DB');
+    if (qSheet.getLastRow() > 1) {
+        const data = qSheet.getDataRange().getValues();
+        const headers = data[0];
+        const idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
+        if (idxBook > -1) {
+            for (let i = 1; i < data.length; i++) {
+                const val = String(data[i][idxBook]).trim();
+                if (val) bookSet.add(val);
+            }
+        }
+    }
+
+    // 2. ANSWER_LOG
+    const aSheet = getSheet('ANSWER_LOG');
+    if (aSheet.getLastRow() > 1) {
+        const data = aSheet.getDataRange().getValues();
+        const headers = data[0];
+        const idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
+        if (idxBook > -1) {
+            for (let i = 1; i < data.length; i++) {
+                const val = String(data[i][idxBook]).trim();
+                if (val) bookSet.add(val);
+            }
+        }
     }
 
     const books = Array.from(bookSet).sort();
