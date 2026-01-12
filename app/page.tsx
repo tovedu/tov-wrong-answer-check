@@ -23,7 +23,7 @@ export default function Home() {
   // Input Mode State
   const [week, setWeek] = useState('1');
   const [session, setSession] = useState('1');
-  const [book, setBook] = useState('TOV-R1');
+  const [book, setBook] = useState('ROOT-B1');
 
   // Fetch Students & Books on Mount
   useEffect(() => {
@@ -135,9 +135,8 @@ export default function Home() {
                     onChange={(e) => setBook(e.target.value)}
                     className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700 appearance-none cursor-pointer hover:bg-white"
                   >
-                    {books.map((b) => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
+                    <option value="ROOT-B1">ROOT-B1 (뿌리깊은 초등국어 1단계 - 기본편)</option>
+                    <option value="ROOT-J1">ROOT-J1 (뿌리깊은 초등국어 1단계 - 도약편)</option>
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
                 </div>
