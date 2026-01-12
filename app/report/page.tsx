@@ -49,12 +49,19 @@ function ReportContent() {
         const fetchData = async () => {
             try {
                 const res = await fetch(`/api/summary?student_id=${studentId}&from=${fromWeek}&to=${toWeek}`);
-                if (!res.ok) throw new Error('Data fetch failed');
                 const json = await res.json();
-                if (json.error) throw new Error(json.error);
+
+                if (!res.ok) {
+                    throw new Error(json.error || `Server Error (${res.status})`);
+                }
+
+                if (json.error) {
+                    throw new Error(json.error);
+                }
+
                 setData(json);
-            } catch (err) {
-                setError('데이터를 불러오는데 실패했습니다.');
+            } catch (err: any) {
+                setError(err.message || '알 수 없는 오류가 발생했습니다.');
                 console.error(err);
             } finally {
                 setLoading(false);
@@ -67,36 +74,49 @@ function ReportContent() {
     if (loading) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-indigo-600 mb-4"></div>
                 <p className="text-slate-500 font-medium animate-pulse">데이터 분석 중...</p>
             </div>
         );
     }
 
-    if (error || !data) {
+    if (error) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-                <div className="bg-white p-8 rounded-2xl border border-red-100 shadow-xl max-w-md text-center">
-                    <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <AlertTriangle className="w-8 h-8 text-red-500" />
+                <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-6">
+                    <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                        <AlertTriangle className="w-10 h-10 text-red-500" />
                     </div>
-                    <h3 className="font-bold text-lg mb-2 text-slate-800">오류 발생</h3>
-                    <p className="text-slate-500 mb-6">{error || '데이터가 없습니다.'}</p>
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">오류가 발생했습니다</h3>
+                        <p className="text-slate-500 break-keep">{error}</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl text-xs text-slate-400 font-mono text-left overflow-auto max-h-32 mb-4">
+                        Debug Info:<br />
+                        ID: {studentId}<br />
+                        Week: {fromWeek}~{toWeek}
+                    </div>
                     <button
-                        onClick={() => router.back()}
-                        className="px-6 py-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors font-medium shadow-lg shadow-slate-200"
+                        onClick={() => window.location.reload()}
+                        className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-transform active:scale-95"
                     >
                         다시 시도하기
+                    </button>
+                    <button
+                        onClick={() => router.push('/')}
+                        className="w-full py-3 text-slate-500 font-medium hover:text-slate-800 transition-colors"
+                    >
+                        홈으로 돌아가기
                     </button>
                 </div>
             </div>
         );
     }
 
-    // AI Insight Generator
-    const getWeaknessText = () => {
-        if (data.wrong_count === 0) return "완벽합니다! 오답이 없습니다. 꾸준한 학습 태도를 유지해주세요.";
+    if (!data) return null;
 
+    // Helper for AI Insight text
+    const getInsight = () => {
         const topType = data.by_q_type[0];
         const topArea = data.by_area[0];
         const topPassage = data.by_passage[0];
@@ -138,243 +158,174 @@ function ReportContent() {
                     <KPICard
                         label="총 풀이 문항"
                         value={data.total_questions}
-                        icon={FileText}
-                        color="text-indigo-600"
-                        bg="bg-indigo-50"
-                        delay={0}
-                    />
-                    <KPICard
-                        label="오답 문항 수"
-                        value={data.wrong_count}
-                        icon={AlertTriangle}
-                        color="text-rose-600"
-                        bg="bg-rose-50"
+                        icon={BookOpen}
+                        color="text-blue-600"
+                        bg="bg-blue-50"
                         delay={1}
                     />
                     <KPICard
-                        label="현재 오답률"
-                        value={`${(data.wrong_rate * 100).toFixed(1)}%`}
-                        icon={TrendingDown}
-                        color="text-orange-600"
-                        bg="bg-orange-50"
+                        label="총 오답 수"
+                        value={data.wrong_count}
+                        icon={AlertTriangle}
+                        color="text-red-500"
+                        bg="bg-red-50"
                         delay={2}
                     />
                     <KPICard
-                        label="취약 유형 1위"
-                        value={data.by_q_type[0]?.q_type || '-'}
-                        icon={Target}
-                        color="text-emerald-600"
+                        label="오답률"
+                        value={`${(data.wrong_rate * 100).toFixed(1)}%`}
+                        icon={TrendingDown}
+                        color="text-emerald-500"
                         bg="bg-emerald-50"
                         delay={3}
+                    />
+                    <KPICard
+                        label="취약 유형"
+                        value={data.by_q_type[0]?.q_type || '-'}
+                        icon={Target}
+                        color="text-amber-500"
+                        bg="bg-amber-50"
+                        delay={4}
                     />
                 </div>
 
                 {/* AI Insight */}
-                <div className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white p-8 rounded-3xl shadow-xl shadow-indigo-200/50 relative overflow-hidden transform transition-all hover:scale-[1.01]">
-                    <div className="relative z-10">
-                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 opacity-90">
-                            <span className="bg-white/20 p-1.5 rounded-lg"><BookOpen className="w-5 h-5" /></span>
-                            AI 학습 제언
-                        </h3>
-                        <p
-                            className="text-indigo-50 leading-relaxed font-medium text-lg md:text-xl"
-                            dangerouslySetInnerHTML={{ __html: getWeaknessText() }}
-                        />
-                    </div>
-                    <div className="absolute top-0 right-0 w-80 h-80 bg-white opacity-5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-                    <div className="absolute bottom-0 left-0 w-60 h-60 bg-blue-500 opacity-10 rounded-full -ml-10 -mb-10 blur-3xl"></div>
+                <div className="bg-gradient-to-r from-slate-800 to-indigo-900 rounded-3xl p-8 shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-transform duration-500">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none group-hover:bg-white/10 transition-colors"></div>
+                    <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-indigo-200">
+                        <span className="animate-pulse">✨</span> AI 분석 인사이트
+                    </h2>
+                    <p
+                        className="text-lg md:text-xl leading-relaxed font-medium text-slate-100"
+                        dangerouslySetInnerHTML={{ __html: getInsight() || "데이터가 충분하지 않아 분석할 수 없습니다." }}
+                    />
                 </div>
 
-                {/* Charts Area */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Bar Chart: Wrong by Question Type */}
+                {/* Charts Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Weak Type Chart */}
                     <ChartCard title="유형별 오답 분포" subtitle="가장 많이 틀린 문제 유형">
-                        <ResponsiveContainer width="100%" height={320}>
-                            <BarChart data={data.by_q_type} layout="vertical" margin={{ left: 40, right: 30, top: 10, bottom: 10 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    dataKey="q_type"
-                                    type="category"
-                                    width={100}
-                                    tick={{ fontSize: 13, fill: '#64748b', fontWeight: 500 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <Tooltip
-                                    cursor={{ fill: '#f1f5f9' }}
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Bar dataKey="count" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={28} name="오답 수">
-                                    {data.by_q_type.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={index === 0 ? '#4f46e5' : '#818cf8'} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={data.by_q_type.slice(0, 5)} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" hide />
+                                    <YAxis
+                                        type="category"
+                                        dataKey="q_type"
+                                        width={100}
+                                        tick={{ fontSize: 12, fill: '#64748b' }}
+                                    />
+                                    <Tooltip
+                                        cursor={{ fill: '#f8fafc' }}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        formatter={(val: any) => [`${val}개`, '오답']}
+                                    />
+                                    <Bar dataKey="count" fill="#3B82F6" radius={[0, 4, 4, 0]} barSize={20} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
                     </ChartCard>
 
-                    {/* Line Chart: Wrong Trend */}
-                    <ChartCard title="주차별 오답 추이" subtitle="주차별 오답 수 변화 흐름">
-                        <ResponsiveContainer width="100%" height={320}>
-                            <LineChart data={data.by_week} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis
-                                    dataKey="week"
-                                    tickFormatter={(v) => `${v}주`}
-                                    tick={{ fill: '#64748b', fontSize: 12 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    dy={10}
-                                />
-                                <YAxis
-                                    allowDecimals={false}
-                                    tick={{ fill: '#64748b', fontSize: 12 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                    formatter={(val: any) => [`${val}개`, '오답']}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="count"
-                                    stroke="#f43f5e"
-                                    strokeWidth={4}
-                                    dot={{ r: 4, fill: '#fff', stroke: '#f43f5e', strokeWidth: 2 }}
-                                    activeDot={{ r: 7, fill: '#f43f5e', stroke: '#fff', strokeWidth: 2 }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </ChartCard>
-
-                    {/* Pie Charts */}
-                    <ChartCard title="영역별 취약점" subtitle="독해 영역별 오답 비율">
-                        <div className="flex items-center justify-center h-[320px]">
+                    {/* Area Chart */}
+                    <ChartCard title="영역별 취약도" subtitle="독해 vs 어휘 오답 비율">
+                        <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
                                         data={data.by_area}
                                         cx="50%"
                                         cy="50%"
-                                        innerRadius={70}
-                                        outerRadius={100}
-                                        paddingAngle={4}
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
                                         dataKey="count"
-                                        stroke="none"
-                                        cornerRadius={4}
                                     >
                                         {data.by_area.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                    <Tooltip />
+                                    <Legend verticalAlign="bottom" height={36} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
                     </ChartCard>
 
-                    <ChartCard title="지문 유형별 오답" subtitle="지문 종류에 따른 취약점">
-                        <div className="flex items-center justify-center h-[320px]">
+                    {/* Weekly Trend */}
+                    <ChartCard title="주차별 오답 추이" subtitle="오답 수 변화 그래프">
+                        <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={data.by_passage}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={70}
-                                        outerRadius={100}
-                                        paddingAngle={4}
+                                <LineChart data={data.by_week}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="week" tickFormatter={w => `${w}주`} tick={{ fontSize: 12 }} />
+                                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        formatter={(val: any) => [`${val}개`, '오답']}
+                                    />
+                                    <Line
+                                        type="monotone"
                                         dataKey="count"
-                                        stroke="none"
-                                        cornerRadius={4}
-                                    >
-                                        {data.by_passage.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={['#10b981', '#f59e0b', '#6366f1', '#ec4899'][index % 4]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                                </PieChart>
+                                        stroke="#8B5CF6"
+                                        strokeWidth={3}
+                                        dot={{ r: 4, fill: '#8B5CF6', strokeWidth: 2, stroke: '#fff' }}
+                                        activeDot={{ r: 6 }}
+                                    />
+                                </LineChart>
                             </ResponsiveContainer>
                         </div>
                     </ChartCard>
                 </div>
 
-                {/* Detailed Table */}
+                {/* Wrong Answer Table */}
                 <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                        <div>
-                            <h3 className="font-bold text-lg text-slate-800">상세 오답 내역</h3>
-                            <p className="text-slate-400 text-sm mt-1">틀린 문제들의 상세 정보를 확인하세요.</p>
-                        </div>
+                    <div className="p-6 border-b border-slate-100">
+                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-slate-400" />
+                            상세 오답 내역
+                        </h3>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-xs">
+                            <thead className="bg-slate-50 text-slate-500 font-medium">
                                 <tr>
-                                    <th className="px-6 py-4">주차 / 회차</th>
-                                    <th className="px-6 py-4">문항 번호</th>
-                                    <th className="px-6 py-4">유형</th>
+                                    <th className="px-6 py-4">주차/회차</th>
+                                    <th className="px-6 py-4">문항</th>
                                     <th className="px-6 py-4">영역</th>
-                                    <th className="px-6 py-4">지문 유형</th>
+                                    <th className="px-6 py-4">유형</th>
+                                    <th className="px-6 py-4">지문 갈래</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {data.wrong_list.map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-indigo-50/30 transition-colors group">
-                                        <td className="px-6 py-4 font-medium text-slate-700">
-                                            <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold mr-2 text-slate-500">W{item.week}</span>
-                                            Session {item.session}
+                                {data.wrong_list.map((item, i) => (
+                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4 font-medium text-slate-900">
+                                            {item.week}주차-{item.session}회
+                                        </td>
+                                        <td className="px-6 py-4 font-bold text-red-500">
+                                            {item.q_slot}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full group-hover:bg-rose-100 transition-colors">
-                                                {item.q_slot}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-600 font-medium">{item.q_type}</td>
-                                        <td className="px-6 py-4 text-slate-600">
-                                            <span className="inline-flex items-center gap-1.5">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${item.area === 'Facts' ? 'bg-blue-400' : 'bg-green-400'}`}></span>
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.area === '독해' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
                                                 {item.area}
                                             </span>
                                         </td>
+                                        <td className="px-6 py-4 text-slate-600">{item.q_type}</td>
                                         <td className="px-6 py-4 text-slate-600">{item.passage_group}</td>
                                     </tr>
                                 ))}
-                                {data.wrong_list.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-2">
-                                                    <BookOpen className="w-6 h-6 text-slate-300" />
-                                                </div>
-                                                <p>오답 내역이 없습니다.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
                             </tbody>
                         </table>
                     </div>
+                    {data.wrong_list.length === 0 && (
+                        <div className="p-12 text-center text-slate-400">
+                            오답 내역이 없습니다. (완벽합니다! 🎉)
+                        </div>
+                    )}
                 </div>
             </div>
         </main>
-    );
-}
-
-export default function ReportPage() {
-    return (
-        <Suspense fallback={
-            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
-                <p className="text-slate-500 font-medium animate-pulse">페이지 로딩 중...</p>
-            </div>
-        }>
-            <ReportContent />
-        </Suspense>
     );
 }
 
@@ -422,5 +373,13 @@ function ChartCard({ title, subtitle, children }: ChartCardProps) {
             </div>
             {children}
         </div>
+    );
+}
+
+export default function ReportPage() {
+    return (
+        <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
+            <ReportContent />
+        </Suspense>
     );
 }
