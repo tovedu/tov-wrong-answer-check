@@ -31,16 +31,27 @@ export async function GET(request: NextRequest) {
         });
 
         if (!response.ok) {
+            const text = await response.text();
+            console.error(`GAS Error (${response.status}):`, text);
             return NextResponse.json(
-                { error: 'Failed to fetch from GAS', status: response.status },
+                { error: `GAS Error (${response.status}): ${text.substring(0, 100)}` },
                 { status: response.status }
             );
         }
 
-        const data = await response.json();
-        return NextResponse.json(data);
+        const text = await response.text();
+        try {
+            const data = JSON.parse(text);
+            return NextResponse.json(data);
+        } catch (e) {
+            console.error('JSON Parse Error in Summary. Raw:', text);
+            return NextResponse.json(
+                { error: `Invalid JSON from GAS: ${text.substring(0, 50)}...`, details: text.substring(0, 200) },
+                { status: 500 }
+            );
+        }
     } catch (error) {
         console.error('Proxy Error (Summary):', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: String(error) }, { status: 500 });
     }
 }
