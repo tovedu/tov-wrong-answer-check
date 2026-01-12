@@ -128,7 +128,7 @@ function getSummary(params, output) {
     const answerSheet = getSheet('ANSWER_LOG');
     const answerData = answerSheet.getDataRange().getValues();
     const answerHeaders = answerData[0];
-    const idxLogBook = findHeaderIndex(answerHeaders, ['book_id', 'bookid', 'book', '교재', '책']);
+    const idxLogBook = findHeaderIndex(answerHeaders, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']); // Added '교재_id'
     const idxLogWeek = 3; // Default
     const idxLogSession = 4; // Default
     const idxLogStudent = 2; // Default
@@ -141,12 +141,22 @@ function getSummary(params, output) {
         const tHeaders = tRows[0];
         const idxGroup = findHeaderIndex(tHeaders, ['passage_group', 'group', '지문그룹', '지문']);
         const idxType = findHeaderIndex(tHeaders, ['text_type', 'type', '텍스트유형', '유형', '갈래']);
+        const idxTBook = findHeaderIndex(tHeaders, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
 
         if (idxGroup > -1 && idxType > -1) {
             for (let i = 1; i < tRows.length; i++) {
-                const grp = tRows[i][idxGroup];
-                const typ = tRows[i][idxType];
-                if (grp) textMeta[grp] = typ;
+                const grp = String(tRows[i][idxGroup]).trim();
+                const typ = String(tRows[i][idxType]).trim();
+                const bk = idxTBook > -1 ? String(tRows[i][idxTBook]).trim() : '';
+
+                if (grp) {
+                    // Store both global group and scoped group for flexibility
+                    if (bk) {
+                        textMeta[`${bk}|${grp}`] = typ;
+                    }
+                    // Also store by group alone as fallback (or if book is blank) -> Risk of overwrite but useful default
+                    if (!textMeta[grp]) textMeta[grp] = typ;
+                }
             }
         }
     }
@@ -173,7 +183,7 @@ function getSummary(params, output) {
         const idxType = findHeaderIndex(qHeaders, ['type', '유형']);
         const idxArea = findHeaderIndex(qHeaders, ['area', '영역']);
         const idxPassage = findHeaderIndex(qHeaders, ['passage', '지문', 'group']);
-        const idxBook = findHeaderIndex(qHeaders, ['book_id', 'bookid', 'book', '교재', '책']);
+        const idxBook = findHeaderIndex(qHeaders, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
 
         if (idxWeek > -1 && idxSession > -1 && idxSlot > -1) {
             for (let i = 1; i < qRows.length; i++) {
@@ -183,17 +193,26 @@ function getSummary(params, output) {
                 const q = row[idxSlot];
 
                 // Book Filter
-                if (targetBook && idxBook > -1) {
-                    const b = String(row[idxBook]).trim();
-                    if (b && b !== targetBook) continue;
-                }
+                const qBook = idxBook > -1 ? String(row[idxBook]).trim() : '';
+                if (targetBook && qBook && qBook !== targetBook) continue;
 
-                const key = `${w}-${s}-${q}`; // Note: Key might overlap if book not part of it, but since we filter by book, we only process ONE book's data, so no collision effectively in this request.
+                const key = `${w}-${s}-${q}`;
 
                 const qType = idxType > -1 ? String(row[idxType]) : 'Unknown';
                 const qArea = idxArea > -1 ? String(row[idxArea]) : 'Unknown';
-                const pGroup = idxPassage > -1 ? String(row[idxPassage]) : '';
-                const finalPassageType = textMeta[pGroup] || pGroup || 'Unknown';
+                const pGroup = idxPassage > -1 ? String(row[idxPassage]).trim() : '';
+
+                // Resolve Passage Type: Try Book-Scoped first, then Global
+                let finalPassageType = 'Unknown';
+                if (pGroup) {
+                    if (qBook && textMeta[`${qBook}|${pGroup}`]) {
+                        finalPassageType = textMeta[`${qBook}|${pGroup}`];
+                    } else if (textMeta[pGroup]) {
+                        finalPassageType = textMeta[pGroup];
+                    } else {
+                        finalPassageType = pGroup; // Fallback to group name itself if no mapping
+                    }
+                }
 
                 // Metadata Store
                 qMeta[key] = {
