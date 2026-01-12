@@ -161,9 +161,11 @@ function getSummary(params, output) {
     const answerData = answerSheet.getDataRange().getValues();
     const answerHeaders = answerData[0];
     const idxLogBook = findHeaderIndex(answerHeaders, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
-    const idxLogWeek = 3;
-    const idxLogSession = 4;
-    const idxLogStudent = 2;
+    const idxLogWeek = findHeaderIndex(answerHeaders, ['week', '주차']);
+    const idxLogSession = findHeaderIndex(answerHeaders, ['session', '회차', '세션']);
+    const idxLogStudent = findHeaderIndex(answerHeaders, ['student', 'student_id', '학생', 'id']);
+    const idxLogSlot = findHeaderIndex(answerHeaders, ['slot', 'q_slot', '문항', '번호']); // Should be 5 usually
+    const idxLogWrong = findHeaderIndex(answerHeaders, ['is_wrong', 'wrong', '오답', '틀림']); // Should be 6 usually
 
     // 2. Load TEXT_DB (Passage Metadata)
     let textMeta = {};
@@ -324,50 +326,64 @@ function getSummary(params, output) {
     const wrongByWeek = {};
     const wrongList = [];
 
-    for (let i = 1; i < answerData.length; i++) {
-        const row = answerData[i];
-        const rStu = String(row[idxLogStudent]).trim();
-        const rWeek = parseInt(String(row[idxLogWeek]).replace(/[^0-9]/g, ''));
-        const rSession = String(row[idxLogSession]).replace(/[^0-9]/g, ''); // Robust match
-        const rSlot = String(row[5]).trim();
-        const isWrong = (row[6] === true || row[6] === 'true' || row[6] === 'TRUE');
+    // Debug Stats
+    const debug = {
+        matched_rows: 0,
+        unmatched_data: []
+    };
 
-        if (targetBook && idxLogBook > -1) {
-            const b = String(row[idxLogBook]).trim();
-            if (b && b !== targetBook) continue;
-        }
+    if (idxLogStudent > -1 && idxLogWeek > -1 && idxLogSession > -1 && idxLogWrong > -1) {
+        for (let i = 1; i < answerData.length; i++) {
+            const row = answerData[i];
+            const rStu = String(row[idxLogStudent]).trim();
+            const rWeek = parseInt(String(row[idxLogWeek]).replace(/[^0-9]/g, ''));
+            const rSession = String(row[idxLogSession]).replace(/[^0-9]/g, '');
+            const rSlot = idxLogSlot > -1 ? String(row[idxLogSlot]).trim() : String(row[5]).trim(); // Fallback to 5
+            const isWrong = (row[idxLogWrong] === true || row[idxLogWrong] === 'true' || row[idxLogWrong] === 'TRUE');
 
-        // Robust Student ID Match (Case-insensitive)
-        const normalize = (s) => String(s).toLowerCase().replace(/ /g, ''); // Remove all spaces
+            if (targetBook && idxLogBook > -1) {
+                const b = String(row[idxLogBook]).trim();
+                if (b && b !== targetBook) continue;
+            }
 
-        if (normalize(rStu) === normalize(studentId) && rWeek >= fromWeek && rWeek <= toWeek) {
-            if (isWrong) {
-                wrongCount++;
+            // Robust Student ID Match (Case-insensitive)
+            const normalize = (s) => String(s).toLowerCase().replace(/ /g, '');
 
-                const key = `${rWeek}-${rSession}-${rSlot}`;
-                const meta = qMeta[key] || { type: 'Unknown', area: 'Unknown', raw_passage_group: 'Unknown', passage: 'Unknown' };
+            if (normalize(rStu) === normalize(studentId) && rWeek >= fromWeek && rWeek <= toWeek) {
+                debug.matched_rows++;
 
-                const t = meta.type || 'Unknown';
-                wrongByType[t] = (wrongByType[t] || 0) + 1;
+                if (isWrong) {
+                    wrongCount++;
 
-                const a = meta.area || 'Unknown';
-                wrongByArea[a] = (wrongByArea[a] || 0) + 1;
+                    const key = `${rWeek}-${rSession}-${rSlot}`;
+                    const meta = qMeta[key] || { type: 'Unknown', area: 'Unknown', raw_passage_group: 'Unknown', passage: 'Unknown' };
 
-                const p = meta.raw_passage_group || 'Unknown';
-                wrongByPassage[p] = (wrongByPassage[p] || 0) + 1;
+                    if (meta.type === 'Unknown') {
+                        debug.unmatched_data.push(key); // Log missing keys
+                    }
 
-                const wKey = `${rWeek}주차`;
-                wrongByWeek[wKey] = (wrongByWeek[wKey] || 0) + 1;
+                    const t = meta.type || 'Unknown';
+                    wrongByType[t] = (wrongByType[t] || 0) + 1;
 
-                wrongList.push({
-                    week: rWeek,
-                    session: rSession,
-                    slot: rSlot,
-                    area: meta.area,
-                    type: meta.type,
-                    passage: meta.passage,
-                    date: row[1]
-                });
+                    const a = meta.area || 'Unknown';
+                    wrongByArea[a] = (wrongByArea[a] || 0) + 1;
+
+                    const p = meta.raw_passage_group || 'Unknown';
+                    wrongByPassage[p] = (wrongByPassage[p] || 0) + 1;
+
+                    const wKey = `${rWeek}주차`;
+                    wrongByWeek[wKey] = (wrongByWeek[wKey] || 0) + 1;
+
+                    wrongList.push({
+                        week: rWeek,
+                        session: rSession,
+                        slot: rSlot,
+                        area: meta.area,
+                        type: meta.type,
+                        passage: meta.passage,
+                        date: row[1]
+                    });
+                }
             }
         }
     }
@@ -412,7 +428,8 @@ function getSummary(params, output) {
         by_area: byArea,
         by_passage_group: byPassage,
         by_week: byWeek,
-        wrong_list: wrongList
+        wrong_list: wrongList,
+        debug: debug // Include debug info
     }));
 }
 
