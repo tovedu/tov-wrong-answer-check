@@ -246,6 +246,7 @@ function getSummary(params, output) {
                     s = lastSession;
                 }
 
+                let validBook = rawBook;
                 if (rawBook) {
                     lastBook = rawBook;
                 } else {
