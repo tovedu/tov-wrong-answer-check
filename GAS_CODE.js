@@ -246,16 +246,28 @@ function getSummary(params, output) {
                     s = lastSession;
                 }
 
-                let validBook = rawBook;
                 if (rawBook) {
                     lastBook = rawBook;
                 } else {
                     validBook = lastBook;
                 }
 
+                // Parser Fallback for Question ID (e.g., ROOT-B1-W1-S1-R1)
+                const qIdMatch = String(row[0]).match(/W(\d+)-S(\d+)-([A-Z0-9]+)/); // Simple regex to catch W#-S#-Slot
+                if (qIdMatch && (!w || !s)) {
+                    // If columns missing but ID string exists, use parsing
+                    if (!w) w = parseInt(qIdMatch[1]);
+                    if (!s) s = parseInt(qIdMatch[2]);
+                    // Slot is usually last part
+                }
+
                 const q = String(row[idxSlot]).trim();
 
-                if (!w || !s || !q) continue;
+                if (!w || !s || !q) {
+                    // Attempt one last parse from qId if idxSlot was empty too?
+                    // But usually idxSlot is q_number.
+                    continue;
+                }
 
                 if (targetBook && validBook && validBook !== targetBook) continue;
 
