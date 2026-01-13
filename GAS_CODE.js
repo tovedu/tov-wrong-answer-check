@@ -163,7 +163,7 @@ function getSummary(params, output) {
     const idxLogBook = findHeaderIndex(answerHeaders, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
     const idxLogWeek = findHeaderIndex(answerHeaders, ['week', '주차']);
     const idxLogSession = findHeaderIndex(answerHeaders, ['session', '회차', '세션']);
-    const idxLogStudent = findHeaderIndex(answerHeaders, ['student', 'student_id', '학생', 'id']);
+    const idxLogStudent = findHeaderIndex(answerHeaders, ['student_id', 'student']); // Removed generic 'id' to avoid matching 'log_id'
     const idxLogSlot = findHeaderIndex(answerHeaders, ['slot', 'q_slot', '문항', '번호']); // Should be 5 usually
     const idxLogWrong = findHeaderIndex(answerHeaders, ['is_wrong', 'wrong', '오답', '틀림']); // Should be 6 usually
 
