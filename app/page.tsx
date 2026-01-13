@@ -31,7 +31,7 @@ export default function Home() {
     fetchBooks();
   }, []);
 
-  const [books, setBooks] = useState<string[]>(['TOV-R1']); // Default
+  const [books, setBooks] = useState<{ id: string, name: string }[]>([]); // Default
 
   const fetchBooks = async () => {
     try {
@@ -39,8 +39,14 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         if (data.books && Array.isArray(data.books)) {
-          setBooks(data.books);
-          if (data.books.length > 0) setBook(data.books[0]);
+          // Handle both string[] (legacy) and {id, name}[] (new)
+          const parsedBooks = data.books.map((b: any) => {
+            if (typeof b === 'string') return { id: b, name: b };
+            // If name exists, use 'Name (ID)', else just 'ID'
+            return { id: b.id, name: b.name ? `${b.name} (${b.id})` : b.id };
+          });
+          setBooks(parsedBooks);
+          if (parsedBooks.length > 0) setBook(parsedBooks[0].id);
         }
       }
     } catch (e) {
@@ -136,7 +142,7 @@ export default function Home() {
                     className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-semibold text-slate-700 appearance-none cursor-pointer hover:bg-white"
                   >
                     {books.map((b) => (
-                      <option key={b} value={b}>{b}</option>
+                      <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />

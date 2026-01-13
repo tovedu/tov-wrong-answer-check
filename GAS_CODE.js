@@ -310,8 +310,20 @@ function getSummary(params, output) {
                 // Store with Raw/Local Session Key
                 qMeta[key] = metaObj;
 
-                // Store with Calculated Global Session Key (Dual Indexing Strategy)
-                // If DB has "1" for Week 2, but App sends "6", this bridge fixes it.
+                // Fix for Week 2+ Data: Bridge Global Session (DB) to Relative Session (Log)
+                // If DB has "6" (Week 2, Session 1), but Log expects "1", we need an alias.
+                if (s > 5) {
+                    const relativeS = s - (w - 1) * 5;
+                    if (relativeS >= 1 && relativeS <= 5) {
+                        const relativeKey = `${w}-${relativeS}-${q}`;
+                        if (!qMeta[relativeKey]) {
+                            qMeta[relativeKey] = metaObj;
+                        }
+                    }
+                }
+
+                // Store with Calculated Global Session Key (Dual Indexing Strategy - Reverse Direction)
+                // This was for the case if DB had "1" but App sent "6", though less likely now.
                 if (s <= 5 && w >= 1) {
                     const globalS = (w - 1) * 5 + s;
                     if (globalS !== s) {
@@ -580,39 +592,76 @@ function getStudentList(output) {
 }
 
 function getBookList(output) {
-    // Union of QUESTION_DB and ANSWER_LOG books
-    const bookSet = new Set();
+    const bookMap = {}; // id -> name
 
-    // 1. QUESTION_DB
+    // 1. Read from BOOK_DB (Master Data)
+    const bSheet = getSheet('BOOK_DB');
+    if (bSheet.getLastRow() > 1) {
+        const data = bSheet.getDataRange().getValues();
+        const headers = data[0];
+        // User requested '교재_id' and '교재명' specifically, but we keep flexible matching
+        const idxId = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
+        const idxName = findHeaderIndex(headers, ['book_name', 'name', '교재명', '이름']);
+
+        if (idxId > -1) {
+            for (let i = 1; i < data.length; i++) {
+                const id = String(data[i][idxId]).trim();
+                if (id) {
+                    // Use found name, or fallback to ID if name column missing/empty
+                    const name = (idxName > -1 && data[i][idxName]) ? String(data[i][idxName]).trim() : id;
+                    bookMap[id] = name;
+                }
+            }
+        }
+    }
+
+    // 2. Scan QUESTION_DB & ANSWER_LOG for any legacy/other IDs not in BOOK_DB
+    // (This ensures we don't break if BOOK_DB is incomplete but data exists)
+    const usedIds = new Set();
+
+    // QUESTION_DB
     const qSheet = getSheet('QUESTION_DB');
     if (qSheet.getLastRow() > 1) {
         const data = qSheet.getDataRange().getValues();
-        const headers = data[0];
-        const idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
+        const idxBook = findHeaderIndex(data[0], ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
         if (idxBook > -1) {
             for (let i = 1; i < data.length; i++) {
                 const val = String(data[i][idxBook]).trim();
-                if (val) bookSet.add(val);
+                if (val) usedIds.add(val);
             }
         }
     }
 
-    // 2. ANSWER_LOG
+    // ANSWER_LOG
     const aSheet = getSheet('ANSWER_LOG');
     if (aSheet.getLastRow() > 1) {
         const data = aSheet.getDataRange().getValues();
-        const headers = data[0];
-        const idxBook = findHeaderIndex(headers, ['book_id', 'bookid', 'book', '교재', '책']);
+        const idxBook = findHeaderIndex(data[0], ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
         if (idxBook > -1) {
             for (let i = 1; i < data.length; i++) {
                 const val = String(data[i][idxBook]).trim();
-                if (val) bookSet.add(val);
+                if (val) usedIds.add(val);
             }
         }
     }
 
-    const books = Array.from(bookSet).sort();
-    if (books.length === 0) books.push("TOV-R1");
+    // Merge: Add used IDs to map if missing
+    usedIds.forEach(id => {
+        if (!bookMap[id]) {
+            bookMap[id] = id; // Fallback name is ID
+        }
+    });
+
+    // 3. Transform to List
+    // If map empty (no DB, no data), fallback default
+    if (Object.keys(bookMap).length === 0) {
+        bookMap["TOV-R1"] = "TOV-R1";
+    }
+
+    const books = Object.keys(bookMap).sort().map(id => ({
+        id: id,
+        name: bookMap[id]
+    }));
 
     return output.setContent(JSON.stringify({ books: books }));
 }
