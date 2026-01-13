@@ -7,6 +7,7 @@ import {
     PieChart, Pie, Cell, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { BookOpen, AlertTriangle, TrendingUp, Target, FileText, CheckCircle, Percent } from 'lucide-react';
+import { getInsightContent } from '../lib/insight-data';
 
 // --- Types ---
 interface SummaryData {
@@ -94,27 +95,85 @@ function ReportContent() {
         if (!data) return '';
 
         const qTypes = toArray(data.by_q_type);
-        // Safe sort
+        // Safe sort by accuracy ascending (lowest first)
         const sortedTypes = [...qTypes].sort((a, b) => (Number(a.accuracy) || 0) - (Number(b.accuracy) || 0));
-        const weakType1 = sortedTypes[0];
-        const weakType2 = sortedTypes[1];
 
+        // Filter out types with 100% accuracy if possible, unless all are 100%
+        const weakTypes = sortedTypes.filter(t => (Number(t.accuracy) || 0) < 100);
+        const targetType = weakTypes.length > 0 ? weakTypes[0] : sortedTypes[0];
+
+        if (!targetType) return '아직 데이터가 충분하지 않습니다.';
+
+        const weakType1 = targetType;
+        // Find category for this type if possible, or infer from somewhere
+        // In our data, 'type' is just '세부내용', 'area' might be 'Reading' aka '독서'
+        // We need to look up the area for this specific type from the data if possible.
+        // The summary data 'by_q_type' doesn't explicitly have 'area' in the aggregated list usually?
+        // Let's check the interface. SummaryData['by_q_type'] is { q_type, accuracy, total, wrong }
+        // We might need to guess category or assume based on common names.
+        // Or check 'wrong_list' to find an example of this type and see its area.
+
+        let category = '독서'; // Default
+        const example = (data.wrong_list || []).find((w: any) => w.type === weakType1.q_type);
+        if (example) {
+            if (example.area === 'Vocabulary' || example.area === '어휘') category = '어휘'; // Not supported in insight-data yet
+            else if (example.passage && example.passage.includes('문학')) category = '문학'; // Try to infer from passage genre
+            else if (example.area === 'Reading' || example.area === '독해') {
+                // Check if passage is literature-ish?
+                if (['현대시', '고전시가', '현대소설', '고전소설', '수필', '극'].some(g => (example.passage || '').includes(g))) {
+                    category = '문학';
+                }
+            }
+        }
+
+        // Refined Logic: If inferred category is weak, check overall scores
         const groups = toArray(data.by_passage_group);
         const lit = groups.find(p => p.passage_group && p.passage_group.includes('문학')) || { accuracy: 0 };
         const nonLit = groups.find(p => p.passage_group && (p.passage_group.includes('독서') || p.passage_group.includes('비문학'))) || { accuracy: 0 };
-
         const litAcc = Number(lit.accuracy) || 0;
         const nonLitAcc = Number(nonLit.accuracy) || 0;
-        const comparison = litAcc > nonLitAcc ? '문학이 비문학보다 강점입니다.' : '비문학이 문학보다 강점입니다.';
 
-        if (!weakType1) return '아직 데이터가 충분하지 않습니다.';
+        // If we couldn't find category from example (e.g. no wrong answers for that type? but it is weak?), then guess.
+        // Actually if it is weak, there must be wrong answers.
+
+        const content = getInsightContent(category, weakType1.q_type || '');
+
+        // Strength Logic
+        const strengthArea = litAcc >= nonLitAcc ? '문학' : '독서(비문학)';
+        const strengthFeature = strengthArea === '문학'
+            ? '정서 및 인물 파악에 탁월한 직관력'
+            : '논리적 구조 파악과 사실적 정보 처리 능력';
+
+        const weaknessConnect = strengthArea === '문학'
+            ? '비문학 세부 정보 파악을 위한 시각적 구조화'
+            : '문학 작품의 심층적 의미 파악을 위한 논리적 근거 찾기';
 
         return `
-            <span class="font-bold text-yellow-300">${studentId}</span> 학생은 
-            <span class="font-bold text-yellow-300">Week ${fromWeek}~${toWeek}</span> 동안<br/>
-            <span class="font-bold text-red-300">'${weakType1.q_type || '알 수 없음'}'</span> (${weakType1.accuracy || 0}%) 유형이 가장 취약합니다.<br/>
-            ${weakType2 ? `다음으로 <span class='text-red-200'>'${weakType2.q_type || '알 수 없음'}'</span> (${weakType2.accuracy || 0}%) 유형 보완이 필요하며,` : ''}
-            <br/>${comparison}
+            <div class="space-y-4">
+                <div>
+                   <span class="text-xl font-bold text-yellow-300">✨ AI 학습 처방전</span><br/>
+                   <span class="font-bold text-white">${studentId}</span> 학생은 지난 <span class="font-bold text-white">Week ${fromWeek}~${toWeek}</span> 동안 
+                   <span class="font-bold text-red-300">'${category}'</span> 영역의 정답률이 
+                   <span class="font-bold text-red-300">${weakType1.accuracy || 0}%</span>로 가장 낮게 나타났습니다. 
+                   특히 <span class="font-bold text-red-300">${weakType1.q_type}</span> 유형에 취약점을 보이고 있습니다.<br/>
+                   <span class="text-slate-300 text-sm block mt-1">${content.description}</span>
+                </div>
+
+                <div class="bg-white/10 p-4 rounded-xl border border-white/20">
+                    <strong class="text-indigo-200 block mb-1">💡 핵심 처방</strong>
+                    <p class="text-slate-100 leading-relaxed text-sm">
+                        ${content.prescription}
+                    </p>
+                </div>
+
+                <div class="bg-indigo-500/20 p-4 rounded-xl border border-indigo-500/30">
+                    <strong class="text-indigo-200 block mb-1">🚀 강점 발견 & 전이 전략</strong>
+                    <p class="text-slate-100 leading-relaxed text-sm">
+                        상대적으로 <strong>'${strengthArea}'</strong> 영역에서 강점을 보이고 있습니다.
+                        <strong>${strengthFeature}</strong>을 활용하여 <strong>${weaknessConnect}</strong>로 연결시키는 전략이 효과적입니다.
+                    </p>
+                </div>
+            </div>
         `;
     };
 
