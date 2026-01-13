@@ -151,21 +151,36 @@ function ReportContent() {
     return (
         <main className="min-h-screen bg-slate-50 p-4 md:p-8 font-nanum">
             <div className="max-w-7xl mx-auto space-y-8">
-                {/* Header */}
-                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => window.location.href = '/'} className="p-2 hover:bg-slate-50 rounded-xl transition-colors">
-                            <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                        </button>
-                        <div>
-                            <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                {studentId} <span className="text-slate-300">|</span> 학습 진단 리포트
-                            </h1>
-                            <p className="text-sm font-bold text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full w-fit mt-1">
-                                WEEK {fromWeek}-{toWeek} <span className="text-slate-400 ml-1">종합 성취도 분석</span>
-                            </p>
+                {/* Header with Debug Info */}
+                <header className="flex flex-col gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => window.location.href = '/'} className="p-2 hover:bg-slate-50 rounded-xl transition-colors">
+                                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                            </button>
+                            <div>
+                                <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                                    {studentId} <span className="text-slate-300">|</span> 학습 진단 리포트
+                                </h1>
+                                <p className="text-sm font-bold text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full w-fit mt-1">
+                                    WEEK {fromWeek}-{toWeek} <span className="text-slate-400 ml-1">종합 성취도 분석</span> • {book}
+                                </p>
+                            </div>
                         </div>
                     </div>
+
+                    {/* DEBUG PANEL */}
+                    <details className="w-full text-xs text-slate-400 bg-slate-50 p-2 rounded border border-slate-200">
+                        <summary className="cursor-pointer font-bold hover:text-indigo-500">🛠️ Debug Info (클릭)</summary>
+                        <div className="mt-2 space-y-1 font-mono">
+                            <p><strong>Student:</strong> {studentId}</p>
+                            <p><strong>Book Param:</strong> {book}</p>
+                            <p><strong>API Request:</strong> /api/summary?student_id={studentId}&from={fromWeek}&to={toWeek}&book={book}</p>
+                            <p><strong>Data Loaded:</strong> {data ? 'YES' : 'NO'}</p>
+                            <p><strong>Wrong Count:</strong> {data?.total_wrong}</p>
+                            <p><strong>Raw Overall:</strong> {JSON.stringify(data?.overall)}</p>
+                        </div>
+                    </details>
                 </header>
 
                 {/* KPI Cards (Section A) */}
