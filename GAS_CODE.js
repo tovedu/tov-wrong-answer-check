@@ -435,7 +435,14 @@ function getSummary(params, output) {
     const overallReading = byArea.find(x => x.area === '독해' || x.area === 'Reading') || { accuracy: 0 };
     const overallVocab = byArea.find(x => x.area === '어휘' || x.area === 'Vocabulary') || { accuracy: 0 };
 
-    return output.setContent(JSON.stringify({
+    // DEBUG: Capture one row's detailed check if it's the target student
+    let debugSample = null;
+    let debugStats = { totalRows: answerData.length, matchStudent: 0, matchBook: 0, matchWeek: 0, isWrong: 0, finalCount: wrongCount };
+
+    // Re-run simple check for debug (or integrate into loop - easier to add separate debug block for safety or just return computed stats)
+    // Actually, let's just return key indices found.
+
+    const summary = {
         student_id: studentId,
         total_questions: totalQuestions,
         total_wrong: wrongCount,
@@ -449,8 +456,23 @@ function getSummary(params, output) {
         by_passage_group: byPassage,
         by_week: byWeek,
         wrong_list: wrongList,
-        debug: debug // Include debug info
-    }));
+        debug: {
+            req_book: targetBook,
+            indices: {
+                book: idxLogBook,
+                student: idxLogStudent,
+                week: idxLogWeek,
+                isWrong: idxLogWrong, // Use actual index
+                session: idxLogSession,
+                slot: idxLogSlot
+            },
+            headers: answerData[0], // Assuming answerData[0] holds headers
+            first_row_sample: answerData.length > 1 ? answerData[1] : [],
+            internal_debug_stats: debug // The existing debug object
+        }
+    };
+
+    return output.setContent(JSON.stringify(summary));
 }
 
 function getWrongList(params, output) {

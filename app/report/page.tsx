@@ -23,6 +23,7 @@ interface SummaryData {
     by_passage_group?: any;
     by_week?: any;
     wrong_list?: any[];
+    debug?: any;
 }
 
 const COLORS = {
@@ -172,13 +173,16 @@ function ReportContent() {
                     {/* DEBUG PANEL */}
                     <details className="w-full text-xs text-slate-400 bg-slate-50 p-2 rounded border border-slate-200">
                         <summary className="cursor-pointer font-bold hover:text-indigo-500">🛠️ Debug Info (클릭)</summary>
-                        <div className="mt-2 space-y-1 font-mono">
+                        <div className="mt-2 space-y-1 font-mono break-all whitespace-pre-wrap">
                             <p><strong>Student:</strong> {studentId}</p>
                             <p><strong>Book Param:</strong> {book}</p>
                             <p><strong>API Request:</strong> /api/summary?student_id={studentId}&from={fromWeek}&to={toWeek}&book={book}</p>
                             <p><strong>Data Loaded:</strong> {data ? 'YES' : 'NO'}</p>
                             <p><strong>Wrong Count:</strong> {data?.total_wrong}</p>
-                            <p><strong>Raw Overall:</strong> {JSON.stringify(data?.overall)}</p>
+                            <div className="bg-slate-100 p-2 mt-1 rounded text-[10px] leading-tight text-slate-600">
+                                <strong>Backend Debug Details:</strong><br />
+                                {JSON.stringify(data?.debug || {}, null, 2)}
+                            </div>
                         </div>
                     </details>
                 </header>
