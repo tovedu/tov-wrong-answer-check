@@ -33,4 +33,8 @@ export interface SummaryData {
     by_passage_group: MetricItem[];
     by_week: MetricItem[];
     wrong_list: WrongAnswer[];
+    comparison?: {
+        literature: { total: number; wrong: number; accuracy: number; };
+        non_literature: { total: number; wrong: number; accuracy: number; };
+    };
 }

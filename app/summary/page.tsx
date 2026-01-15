@@ -168,8 +168,69 @@ export default function SummaryPage() {
                             </div>
                         </div>
                     )}
+                    {/* Area Achievement Comparison */}
+                    {data.comparison && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-3xl shadow-lg border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10">
+                                    <BookOpen className="w-24 h-24 text-blue-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-500 uppercase flex items-center gap-2 mb-4">
+                                        <BookOpen className="w-4 h-4" />
+                                        Reading Achievement (Lit vs Non-Lit)
+                                    </h3>
+                                    <div className="flex gap-8">
+                                        <div>
+                                            <div className="text-xs font-semibold text-slate-400 mb-1">Literature</div>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-3xl font-black text-slate-800">{data.comparison.literature.accuracy}%</span>
+                                                <span className="text-xs text-slate-500">({data.comparison.literature.total - data.comparison.literature.wrong}/{data.comparison.literature.total})</span>
+                                            </div>
+                                            <div className="w-24 h-2 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${data.comparison.literature.accuracy}%` }}></div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-semibold text-slate-400 mb-1">Non-Literature</div>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-3xl font-black text-slate-800">{data.comparison.non_literature.accuracy}%</span>
+                                                <span className="text-xs text-slate-500">({data.comparison.non_literature.total - data.comparison.non_literature.wrong}/{data.comparison.non_literature.total})</span>
+                                            </div>
+                                            <div className="w-24 h-2 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                                                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${data.comparison.non_literature.accuracy}%` }}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-4 text-xs text-slate-400 bg-slate-50 p-2 rounded">
+                                    * Strictly excludes Vocabulary questions.
+                                </div>
+                            </div>
 
-                    {/* Stats Grid */}
+                            <div className="bg-white p-6 rounded-3xl shadow-lg border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10">
+                                    <CheckCircle className="w-24 h-24 text-emerald-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-500 uppercase flex items-center gap-2 mb-4">
+                                        <CheckCircle className="w-4 h-4" />
+                                        Vocabulary Achievement
+                                    </h3>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-4xl font-black text-slate-800">{data.overall.vocab_accuracy}%</span>
+                                        <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">Separate Domain</span>
+                                    </div>
+                                    <div className="w-full h-3 bg-slate-100 rounded-full mt-4 overflow-hidden">
+                                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${data.overall.vocab_accuracy}%` }}></div>
+                                    </div>
+                                </div>
+                                <p className="mt-4 text-sm text-slate-500 leading-relaxed">
+                                    Vocabulary precision is key to improving Reading accuracy.
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[140px]">
                             <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Total Wrong Answers</div>

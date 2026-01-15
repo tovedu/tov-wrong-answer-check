@@ -66,6 +66,10 @@ function findHeaderIndex(headers, keywords) {
     return -1;
 }
 
+function normalizeBookId(id) {
+    return String(id || '').toLowerCase().replace(/\s+/g, '');
+}
+
 function getSheet(name) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(name);
@@ -112,8 +116,8 @@ function getSessionBlueprint(params, output) {
         // Check Book Match (if provided and column exists)
         let bookMatch = true;
         if (targetBook && idxBook > -1) {
-            const rowBook = String(row[idxBook]).trim();
-            if (rowBook && rowBook !== targetBook) bookMatch = false;
+            const rowBook = String(row[idxBook]);
+            if (rowBook && normalizeBookId(rowBook) !== normalizeBookId(targetBook)) bookMatch = false;
         }
 
         // Logic: Match if Week matches AND (Session matches OR InWeek matches)
@@ -169,6 +173,9 @@ function getSummary(params, output) {
 
     // 2. Load TEXT_DB (Passage Metadata)
     let textMeta = {};
+    let textMetaBySession = {}; // Map by Book|Week|Session
+    let textMetaFallback = {};  // Map by Week|Session (Ignore Book)
+
     const textSheet = getSheet('TEXT_DB');
     if (textSheet.getLastRow() > 1) {
         const tRows = textSheet.getDataRange().getValues();
@@ -176,18 +183,46 @@ function getSummary(params, output) {
         const idxGroup = findHeaderIndex(tHeaders, ['passage_group', 'group', '지문그룹', '지문']);
         const idxType = findHeaderIndex(tHeaders, ['text_type', 'type', '텍스트유형', '유형', '갈래']);
         const idxTBook = findHeaderIndex(tHeaders, ['book_id', 'bookid', 'book', '교재', '책', '교재_id']);
+        const idxTWeek = findHeaderIndex(tHeaders, ['week', '주차']);
+        const idxTSession = findHeaderIndex(tHeaders, ['session', '회차', '세션']);
 
-        if (idxGroup > -1 && idxType > -1) {
+        if (idxType > -1) {
+            const normalizeKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
             for (let i = 1; i < tRows.length; i++) {
-                const grp = String(tRows[i][idxGroup]).trim();
+                const grp = idxGroup > -1 ? String(tRows[i][idxGroup]).trim() : '';
                 const typ = String(tRows[i][idxType]).trim();
-                const bk = idxTBook > -1 ? String(tRows[i][idxTBook]).trim() : '';
+                const bk = idxTBook > -1 ? String(tRows[i][idxTBook]) : '';
 
+                // Optimization: Skip TEXT_DB rows for other books
+                if (targetBook && bk && normalizeBookId(bk) !== normalizeBookId(targetBook)) continue;
+
+                const wk = idxTWeek > -1 ? parseInt(String(tRows[i][idxTWeek]).replace(/[^0-9]/g, '')) : null;
+                const sess = idxTSession > -1 ? parseInt(String(tRows[i][idxTSession]).replace(/[^0-9]/g, '')) : null;
+
+                // 2-1. Existing Group-based Mapping
                 if (grp) {
-                    if (bk) {
-                        textMeta[`${bk}|${grp}`] = typ;
-                    }
+                    const normGroup = normalizeKey(grp);
+                    const normBook = normalizeKey(bk);
+                    if (bk) textMeta[`${normBook}|${normGroup}`] = typ;
+                    if (!textMeta[normGroup]) textMeta[normGroup] = typ;
                     if (!textMeta[grp]) textMeta[grp] = typ;
+                }
+
+                // 2-2. New Week/Session-based Mapping
+                if (bk && wk && sess) {
+                    const sessKey = `${normalizeKey(bk)}|${wk}|${sess}`;
+                    textMetaBySession[sessKey] = typ;
+
+                    // Fallback Map: Store Candidates
+                    const fbKey = `${wk}|${sess}`;
+                    if (!textMetaFallback[fbKey]) {
+                        textMetaFallback[fbKey] = [];
+                    }
+                    // Avoid duplicates in candidate list
+                    const existingCand = textMetaFallback[fbKey].find(c => c.book === bk);
+                    if (!existingCand) {
+                        textMetaFallback[fbKey].push({ book: bk, type: typ });
+                    }
                 }
             }
         }
@@ -202,6 +237,23 @@ function getSummary(params, output) {
     const totalByArea = {};
     const totalByPassage = {};
     const totalByWeek = {};
+
+    // CRITICAL: Literature vs Non-Literature comparison (Reading Only)
+    const totalByTextCategory = { Lit: 0, NonLit: 0 };
+    const classifyTextType = (t) => {
+        if (!t || t === '-' || t === 'Unknown') return null;
+        const s = String(t).replace(/\s+/g, '');
+        // Literature Keywords
+        const litKeys = ['소설', '시', '극', '수필', '문학', 'Literature', 'Poem', 'Novel', 'Essay', 'Drama'];
+        // Non-Literature Keywords
+        const nonLitKeys = ['인문', '사회', '과학', '기술', '예술', '독서', '비문학', '칼럼', '설명문', '논설문', 'Non-Literature', 'Reading', 'Art', 'Science', 'Humanities'];
+
+        for (let k of litKeys) if (s.includes(k)) return 'Lit';
+        for (let k of nonLitKeys) if (s.includes(k)) return 'NonLit';
+        return 'NonLit'; // Default to NonLit if specific genre but not strictly Lit? Or 'Unknown'? safely Unknown if unsure. 
+        // Actually user said "Text Genre missing -> Exclude". So let's be strict.
+        return null;
+    };
 
     if (qDbSheet.getLastRow() > 1) {
         const qRows = qDbSheet.getDataRange().getValues();
@@ -253,27 +305,21 @@ function getSummary(params, output) {
                     validBook = lastBook;
                 }
 
-                // Parser Fallback for Question ID (e.g., ROOT-B1-W1-S1-R1)
-                const qIdMatch = String(row[0]).match(/W(\d+)-S(\d+)-([A-Z0-9]+)/); // Simple regex to catch W#-S#-Slot
+                // Parser Fallback
+                const qIdMatch = String(row[0]).match(/W(\d+)-S(\d+)-([A-Z0-9]+)/);
                 if (qIdMatch) {
-                    // If columns missing but ID string exists, use parsing
                     if (!w) w = parseInt(qIdMatch[1]);
                     if (!s) s = parseInt(qIdMatch[2]);
                 }
 
                 let q = String(row[idxSlot]).trim();
-                // Fallback for Slot if empty
-                if (!q && qIdMatch && qIdMatch[3]) {
-                    q = qIdMatch[3];
-                }
+                if (!q && qIdMatch && qIdMatch[3]) q = qIdMatch[3];
 
-                if (!w || !s || !q) {
-                    // Attempt one last parse from qId if idxSlot was empty too?
-                    // But usually idxSlot is q_number.
-                    continue;
-                }
+                if (!w || !s || !q) continue;
+                if (targetBook && validBook && normalizeBookId(validBook) !== normalizeBookId(targetBook)) continue;
 
-                if (targetBook && validBook && validBook !== targetBook) continue;
+                // Optimization: Skip heavy processing for weeks outside the requested range
+                if (w < fromWeek || w > toWeek) continue;
 
                 const key = `${w}-${s}-${q}`;
 
@@ -281,22 +327,89 @@ function getSummary(params, output) {
                 let qArea = 'Unknown';
                 if (q.startsWith('R') || q.startsWith('독')) qArea = 'Reading';
                 else if (q.startsWith('V') || q.startsWith('어')) qArea = 'Vocabulary';
-                else if (idxArea > -1) {
-                    // Fallback if needed, but R/V is robust
-                }
+                else if (idxArea > -1) { /* fallback */ }
 
-                // Type comes from Area column
-                const qType = idxArea > -1 ? String(row[idxArea]).trim() : 'Unknown';
-
+                const qType = idxType > -1 ? String(row[idxType]).trim() : 'Unknown';
+                const normalizeKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
                 const pGroup = idxPassage > -1 ? String(row[idxPassage]).trim() : '';
-                let finalPassageType = 'Unknown';
+                let finalPassageType = '-';
+
                 if (pGroup) {
-                    if (validBook && textMeta[`${validBook}|${pGroup}`]) {
-                        finalPassageType = textMeta[`${validBook}|${pGroup}`];
+                    const normGroup = normalizeKey(pGroup);
+                    const normBook = normalizeKey(validBook);
+                    if (validBook && textMeta[`${normBook}|${normGroup}`]) {
+                        finalPassageType = textMeta[`${normBook}|${normGroup}`];
+                    } else if (textMeta[normGroup]) {
+                        finalPassageType = textMeta[normGroup];
                     } else if (textMeta[pGroup]) {
                         finalPassageType = textMeta[pGroup];
-                    } else {
-                        finalPassageType = pGroup;
+                    }
+                }
+
+                // Fallback: If no passage group match, try Week/Session match
+                if ((!finalPassageType || finalPassageType === '-') && w && s) {
+                    const normBook = validBook ? normalizeKey(validBook) : '';
+
+                    const tryMatch = (week, session) => {
+                        // 1. Exact Book Match
+                        if (normBook) {
+                            const k = `${normBook}|${week}|${session}`;
+                            if (textMetaBySession[k]) return textMetaBySession[k];
+                        }
+
+                        // 2. Fuzzy / Candidate Match
+                        const fbKey = `${week}|${session}`;
+                        const candidates = textMetaFallback[fbKey];
+
+                        if (candidates && candidates.length > 0) {
+                            if (candidates.length === 1) return candidates[0].type;
+
+                            if (validBook) {
+                                const targetTokens = validBook.toLowerCase().split(/[^a-z0-9]+/);
+                                let bestScore = -1;
+                                let bestType = null;
+
+                                candidates.forEach(cand => {
+                                    const candBook = cand.book.toLowerCase();
+                                    const candTokens = candBook.split(/[^a-z0-9]+/);
+
+                                    let score = 0;
+                                    candTokens.forEach(ct => {
+                                        if (targetTokens.includes(ct)) score += 1;
+                                    });
+                                    if (candBook.includes(validBook.toLowerCase()) ||
+                                        validBook.toLowerCase().includes(candBook)) {
+                                        score += 3;
+                                    }
+
+                                    if (score > bestScore) {
+                                        bestScore = score;
+                                        bestType = cand.type;
+                                    }
+                                });
+
+                                if (bestType) return bestType;
+                            }
+                            return candidates[0].type;
+                        }
+                        return null;
+                    };
+
+                    // Try exact session match
+                    let found = tryMatch(w, s);
+                    if (found) finalPassageType = found;
+
+                    // Try relative session match (if s > 5, map to 1-5)
+                    else if (s > 5) {
+                        const relativeS = s - (w - 1) * 5;
+                        found = tryMatch(w, relativeS);
+                        if (found) finalPassageType = found;
+                    }
+                    // Try global session match (if s <= 5, map to Global)
+                    else if (s <= 5) {
+                        const globalS = (w - 1) * 5 + s;
+                        found = tryMatch(w, globalS);
+                        if (found) finalPassageType = found;
                     }
                 }
 
@@ -311,36 +424,33 @@ function getSummary(params, output) {
                 qMeta[key] = metaObj;
 
                 // Fix for Week 2+ Data: Bridge Global Session (DB) to Relative Session (Log)
-                // If DB has "6" (Week 2, Session 1), but Log expects "1", we need an alias.
                 if (s > 5) {
                     const relativeS = s - (w - 1) * 5;
                     if (relativeS >= 1 && relativeS <= 5) {
                         const relativeKey = `${w}-${relativeS}-${q}`;
-                        if (!qMeta[relativeKey]) {
-                            qMeta[relativeKey] = metaObj;
-                        }
+                        if (!qMeta[relativeKey]) qMeta[relativeKey] = metaObj;
                     }
                 }
-
-                // Store with Calculated Global Session Key (Dual Indexing Strategy - Reverse Direction)
-                // This was for the case if DB had "1" but App sent "6", though less likely now.
+                // Store with Calculated Global Session Key
                 if (s <= 5 && w >= 1) {
                     const globalS = (w - 1) * 5 + s;
-                    if (globalS !== s) {
-                        qMeta[`${w}-${globalS}-${q}`] = metaObj;
-                    }
+                    if (globalS !== s) qMeta[`${w}-${globalS}-${q}`] = metaObj;
                 }
 
                 // Aggregation
                 if (!isNaN(w) && w >= fromWeek && w <= toWeek) {
                     totalQuestions++;
-
                     if (qType) totalByType[qType] = (totalByType[qType] || 0) + 1;
                     if (qArea) totalByArea[qArea] = (totalByArea[qArea] || 0) + 1;
                     if (pGroup) totalByPassage[pGroup] = (totalByPassage[pGroup] || 0) + 1;
-
                     const wKey = `${w}주차`;
                     totalByWeek[wKey] = (totalByWeek[wKey] || 0) + 1;
+
+                    // Lit/NonLit Aggregation (Reading Only)
+                    if (qArea === 'Reading') {
+                        const cat = classifyTextType(finalPassageType);
+                        if (cat) totalByTextCategory[cat] = (totalByTextCategory[cat] || 0) + 1;
+                    }
                 }
             }
         }
@@ -352,6 +462,7 @@ function getSummary(params, output) {
     const wrongByArea = {};
     const wrongByPassage = {};
     const wrongByWeek = {};
+    const wrongByTextCategory = { Lit: 0, NonLit: 0 }; // Lit/NonLit
     const wrongList = [];
 
     // Debug Stats
@@ -374,9 +485,9 @@ function getSummary(params, output) {
 
             // Book Filter Debugging
             if (targetBook && idxLogBook > -1) {
-                const b = String(row[idxLogBook]).trim();
-                // Compare with loose matching if needed, but strictly for now
-                if (b && b !== targetBook) {
+                const b = String(row[idxLogBook]);
+                // Compare with loose matching
+                if (b && normalizeBookId(b) !== normalizeBookId(targetBook)) {
                     debug.skipped_by_book++;
                     continue;
                 }
@@ -423,6 +534,12 @@ function getSummary(params, output) {
                 const wKey = `${rWeek}주차`;
                 wrongByWeek[wKey] = (wrongByWeek[wKey] || 0) + 1;
 
+                // Lit/NonLit Aggregation (Reading Only)
+                if (meta.area === 'Reading') {
+                    const cat = classifyTextType(meta.passage);
+                    if (cat) wrongByTextCategory[cat] = (wrongByTextCategory[cat] || 0) + 1;
+                }
+
                 wrongList.push({
                     week: rWeek,
                     session: rSession,
@@ -463,6 +580,18 @@ function getSummary(params, output) {
     const overallReading = byArea.find(x => x.area === '독해' || x.area === 'Reading') || { accuracy: 0 };
     const overallVocab = byArea.find(x => x.area === '어휘' || x.area === 'Vocabulary') || { accuracy: 0 };
 
+    // Comparison Stats
+    const litStats = {
+        total: totalByTextCategory.Lit,
+        wrong: wrongByTextCategory.Lit,
+        accuracy: calcAccuracy(totalByTextCategory.Lit, wrongByTextCategory.Lit)
+    };
+    const nonLitStats = {
+        total: totalByTextCategory.NonLit,
+        wrong: wrongByTextCategory.NonLit,
+        accuracy: calcAccuracy(totalByTextCategory.NonLit, wrongByTextCategory.NonLit)
+    };
+
     // DEBUG: Capture one row's detailed check if it's the target student
     let debugSample = null;
     let debugStats = { totalRows: answerData.length, matchStudent: 0, matchBook: 0, matchWeek: 0, isWrong: 0, finalCount: wrongCount };
@@ -478,6 +607,10 @@ function getSummary(params, output) {
             accuracy: calcAccuracy(totalQuestions, wrongCount),
             reading_accuracy: overallReading.accuracy,
             vocab_accuracy: overallVocab.accuracy
+        },
+        comparison: {
+            literature: litStats,
+            non_literature: nonLitStats
         },
         by_q_type: byType,
         by_area: byArea,
@@ -522,7 +655,7 @@ function getWrongList(params, output) {
         let match = (normalize(row[2]) == normalize(studentId) && row[3] == week && row[4] == session);
 
         if (match && book && idxBook > -1) {
-            match = (row[idxBook] === book);
+            match = (normalizeBookId(row[idxBook]) === normalizeBookId(book));
         }
 
         if (match && (row[6] === true || row[6] === 'true')) {
