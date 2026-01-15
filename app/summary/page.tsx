@@ -177,7 +177,9 @@ export default function SummaryPage() {
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[140px]">
                             <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Worst Question Type</div>
-                            <div className="text-2xl font-bold text-slate-800 text-center">{data.most_freq_type || '-'}</div>
+                            <div className="text-2xl font-bold text-slate-800 text-center">
+                                {data.by_q_type && data.by_q_type.length > 0 ? (data.by_q_type[0].q_type || data.by_q_type[0].name) : '-'}
+                            </div>
                             {data.by_q_type && data.by_q_type[0] && (
                                 <div className="mt-2 text-xs font-medium px-2 py-1 bg-rose-50 text-rose-600 rounded-full">
                                     {(100 - data.by_q_type[0].accuracy).toFixed(0)}% Error Rate
@@ -186,7 +188,9 @@ export default function SummaryPage() {
                         </div>
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[140px]">
                             <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Worst Area</div>
-                            <div className="text-2xl font-bold text-slate-800">{data.most_freq_area || '-'}</div>
+                            <div className="text-2xl font-bold text-slate-800">
+                                {data.by_area && data.by_area.length > 0 ? (data.by_area[0].area || data.by_area[0].name) : '-'}
+                            </div>
                             {data.by_area && data.by_area[0] && (
                                 <div className="mt-2 text-xs font-medium px-2 py-1 bg-amber-50 text-amber-600 rounded-full">
                                     {(100 - data.by_area[0].accuracy).toFixed(0)}% Error Rate
@@ -223,8 +227,8 @@ export default function SummaryPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${row.area === 'Reading' || row.area === '독해'
-                                                        ? 'bg-blue-100 text-blue-700'
-                                                        : 'bg-emerald-100 text-emerald-700'
+                                                    ? 'bg-blue-100 text-blue-700'
+                                                    : 'bg-emerald-100 text-emerald-700'
                                                     }`}>
                                                     {row.area}
                                                 </span>
