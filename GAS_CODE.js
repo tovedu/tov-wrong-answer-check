@@ -137,6 +137,11 @@ function getSessionBlueprint(params, output) {
         }
     }
 
+    // Deduplicate questions
+    questions = questions.filter(function (item, pos) {
+        return questions.indexOf(item) == pos;
+    });
+
     // Sort result
     questions.sort((a, b) => {
         const typeA = a.charAt(0);
@@ -599,8 +604,27 @@ function getSummary(params, output) {
     // Re-run simple check for debug (or integrate into loop - easier to add separate debug block for safety or just return computed stats)
     // Actually, let's just return key indices found.
 
+    // 6. Get Student Name (New Logic)
+    const normalize = (s) => String(s).toLowerCase().replace(/ /g, '');
+    let studentName = studentId; // Default fallback
+    const studentSheet = getSheet('STUDENT_DB');
+    if (studentSheet.getLastRow() > 1) {
+        const sData = studentSheet.getDataRange().getValues();
+        // Assuming Col A = Name, Col B = ID based on getStudentList
+        // But getStudentList says: r[0] name, r[1] id.
+        for (let i = 1; i < sData.length; i++) {
+            const rName = String(sData[i][0]).trim();
+            const rId = String(sData[i][1]).trim();
+            if (normalize(rId) === normalize(studentId)) {
+                studentName = rName;
+                break;
+            }
+        }
+    }
+
     const summary = {
         student_id: studentId,
+        student_name: studentName, // Added field
         total_questions: totalQuestions,
         total_wrong: wrongCount,
         overall: {

@@ -12,6 +12,7 @@ import { getInsightContent } from '../lib/insight-data';
 // --- Types ---
 interface SummaryData {
     student_id: string;
+    student_name?: string;
     total_questions: number;
     total_wrong: number;
     overall?: {
@@ -152,7 +153,7 @@ function ReportContent() {
             <div class="space-y-4">
                 <div>
                    <span class="text-xl font-bold text-yellow-300">✨ AI 학습 처방전</span><br/>
-                   <span class="font-bold text-white">${studentId}</span> 학생은 지난 <span class="font-bold text-white">Week ${fromWeek}~${toWeek}</span> 동안 
+                   <span class="font-bold text-white">${data.student_name ? `${data.student_name} (${studentId})` : studentId}</span> 학생은 지난 <span class="font-bold text-white">Week ${fromWeek}~${toWeek}</span> 동안 
                    <span class="font-bold text-red-300">'${category}'</span> 영역의 정답률이 
                    <span class="font-bold text-red-300">${weakType1.accuracy || 0}%</span>로 가장 낮게 나타났습니다. 
                    특히 <span class="font-bold text-red-300">${weakType1.q_type}</span> 유형에 취약점을 보이고 있습니다.<br/>
@@ -220,7 +221,14 @@ function ReportContent() {
                             </button>
                             <div>
                                 <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                    {studentId} <span className="text-slate-300">|</span> 학습 진단 리포트
+                                    {data.student_name ? (
+                                        <>
+                                            {data.student_name} <span className="text-lg font-normal text-slate-400">({studentId})</span>
+                                        </>
+                                    ) : (
+                                        studentId
+                                    )}
+                                    <span className="text-slate-300">|</span> 학습 진단 리포트
                                 </h1>
                                 <p className="text-sm font-bold text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full w-fit mt-1">
                                     WEEK {fromWeek}-{toWeek} <span className="text-slate-400 ml-1">종합 성취도 분석</span> • {book}
