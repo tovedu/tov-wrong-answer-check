@@ -173,14 +173,11 @@ export function generateInsight(data: SummaryData): InsightResult | null {
     // Filter out items with very few questions? Optional but good for stability. 
     // For now, take raw data.
 
-    data.by_q_type.forEach(item => {
-        const typeName = item.q_type || item.name; // q_type property might be used
-
-        // Normalize name for lookup
+    // Use for...of for better TS control flow analysis
+    for (const item of data.by_q_type) {
+        const typeName = item.q_type || item.name;
         const lookupName = Object.keys(IMPACT_WEIGHTS).find(k => k === typeName) || 'default';
         const weight = IMPACT_WEIGHTS[lookupName];
-
-        // Calculate weakness
         const weaknessRaw = 100 - item.accuracy;
         const score = weaknessRaw * weight;
 
@@ -188,20 +185,20 @@ export function generateInsight(data: SummaryData): InsightResult | null {
             maxWeaknessScore = score;
             worstItem = item;
         }
-    });
+    }
 
-    // Fallback if no specific type data (e.g. only area data available)
     if (!worstItem && data.by_area.length > 0) {
-        data.by_area.forEach(item => {
+        for (const item of data.by_area) {
             const areaName = item.area || item.name;
             const lookupName = Object.keys(IMPACT_WEIGHTS).find(k => k === areaName) || 'default';
             const weight = IMPACT_WEIGHTS[lookupName];
             const score = (100 - item.accuracy) * weight;
+
             if (score > maxWeaknessScore) {
                 maxWeaknessScore = score;
                 worstItem = item;
             }
-        });
+        }
     }
 
     if (!worstItem) return null;
@@ -220,12 +217,13 @@ export function generateInsight(data: SummaryData): InsightResult | null {
     let bestItem: MetricItem | null = null;
     let maxAccuracy = -1;
 
-    [...data.by_area, ...data.by_q_type].forEach(item => {
+    const allItems = [...data.by_area, ...data.by_q_type];
+    for (const item of allItems) {
         if (item.total > 0 && item.accuracy > maxAccuracy) {
             maxAccuracy = item.accuracy;
             bestItem = item;
         }
-    });
+    }
 
     const strengthName = bestItem ? (bestItem.area || bestItem.q_type || bestItem.name) : 'General';
     // Clean up name (remove "Reading" / "Vocabulary" prefix if redundant?) - Keep as is.
