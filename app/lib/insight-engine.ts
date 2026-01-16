@@ -214,18 +214,25 @@ export function generateInsight(data: SummaryData): InsightResult | null {
     // 2. Identify Strength
     // Simply highest accuracy with meaningful sample size (e.g. > 0 questions)
     // We check both Area and Type for strength to give broader compliment.
+    // CRITICAL FIX: Strength cannot be the same as Weakness.
     let bestItem: MetricItem | null = null;
     let maxAccuracy = -1;
 
     const allItems = [...data.by_area, ...data.by_q_type];
+
     for (const item of allItems) {
+        const itemName = item.q_type || item.area || item.name;
+
+        // Skip if this item is the identified weakness
+        if (itemName === worstName) continue;
+
         if (item.total > 0 && item.accuracy > maxAccuracy) {
             maxAccuracy = item.accuracy;
             bestItem = item;
         }
     }
 
-    const strengthName = bestItem ? (bestItem.area || bestItem.q_type || bestItem.name) : 'General';
+    const strengthName = bestItem ? (bestItem.area || bestItem.q_type || bestItem.name) : '종합';
     // Clean up name (remove "Reading" / "Vocabulary" prefix if redundant?) - Keep as is.
 
     const strengthKey = Object.keys(STRENGTH_STRATEGIES).find(k => strengthName.includes(k)) || 'default';
