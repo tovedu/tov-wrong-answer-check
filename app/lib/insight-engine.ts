@@ -84,40 +84,53 @@ const DIAGNOSIS_DB: Record<string, DiagnosisContent> = {
             post: "글의 구조도(마인드맵)를 간단하게 그려보기"
         }
     },
-    // English Keys Mapping
-    'Inference': {
+    '작품이해': {
         cause: [
-            "You tend to rely solely on explicit information and miss implied meanings.",
-            "Focusing too much on word-matching rather than understanding the context.",
-            "Missing the logical link between the author's intent and the text."
+            "인물의 심리나 성격을 파악할 때 직접적인 서술에만 의존하는 경향이 있습니다.",
+            "작품의 시대적 배경이나 상황적 맥락을 고려하지 않고 현대적 관점에서만 해석하려 합니다.",
+            "시적 화자나 서술자의 태도 변화를 민감하게 포착하지 못합니다."
         ],
         prescription: {
-            pre: "Read the question first to identify what needs to be inferred.",
-            during: "Mark conjunctions and emotional adjectives while reading.",
-            post: "Underline the evidence in the text and draw arrows to the answer."
+            pre: "제목과 작가를 확인하여 작품의 갈래와 시대적 배경 유추하기",
+            during: "인물의 정서나 태도가 드러나는 시어/서술에 동그라미 표시하기",
+            post: "작품의 주제와 핵심 갈등 구조를 한 문장으로 정리해보기"
         }
     },
-    'Vocabulary': {
+    '비판': {
         cause: [
-            "Relying too much on dictionary definitions instead of contextual meaning.",
-            "Insufficient understanding of synonyms and antonyms.",
-            "Difficulty grasping conceptual terms due to lack of familiarity."
+            "글쓴이의 관점을 정확히 파악하지 못하고 자신의 주관적 생각을 개입시켜 판단합니다.",
+            "보기(관점)를 참고하여 지문을 감상해야 하는데, 지문의 내용만으로 문제를 해결하려 합니다.",
+            "주장의 타당성을 평가할 때 논리적 근거보다 감정적 동조에 치우칠 때가 있습니다."
         ],
         prescription: {
-            pre: "Prepare to infer meaning from context if you encounter unknown words.",
-            during: "Determine positive/negative nuance from surrounding sentences.",
-            post: "Create a personal vocabulary list with synonyms and antonyms."
+            pre: "'보기'가 있는 경우, 보기를 먼저 읽고 비판의 준거(기준) 확립하기",
+            during: "필자의 주장이나 태도가 드러난 문장에 별표(*) 표시하기",
+            post: "선지의 판단 내용이 '지문'에 근거하는지 '보기'에 근거하는지 구별하기"
         }
     },
-    'Reading': { // General Reading Fallback
+    '적용': {
         cause: [
-            "Lack of consistent reading strategy across different text types.",
-            "Difficulty sustaining concentration throughout long passages."
+            "지문의 원리를 구체적인 사례에 적용하는 전이 능력이 다소 부족합니다.",
+            "사례(보기)의 핵심 특징을 지문의 개념과 일대일로 매칭시키는 훈련이 필요합니다.",
+            "추상적인 개념을 구체적인 상황으로 치환하여 이해하는 데 어려움을 겪습니다."
         ],
         prescription: {
-            pre: "Scan the title and questions to set a reading purpose.",
-            during: "Summarize each paragraph mentally as you read.",
-            post: "Review incorrect answers to identify pattern of errors."
+            pre: "문제의 발문을 통해 어떤 개념을 어디에 적용해야 하는지 확인하기",
+            during: "지문의 핵심 원리나 공식을 간단한 도식으로 메모해두기",
+            post: "사례와 지문의 공통점과 차이점을 표로 정리하여 비교하기"
+        }
+    },
+    // Fallbacks
+    'Reading': {
+        cause: [
+            "지문 갈래(인문, 사회, 과학 등)에 따른 유연한 읽기 전략이 부족합니다.",
+            "긴 지문을 끝까지 읽어내려가는 호흡과 집중력이 다소 부족합니다.",
+            "문제를 풀 때 지문으로 되돌아가는 횟수가 많아 시간이 부족합니다."
+        ],
+        prescription: {
+            pre: "제목과 문제(발문)를 먼저 훑어보고 읽기 목적(무엇을 찾을지) 설정하기",
+            during: "각 문단(또는 의미 단위)이 끝날 때마다 핵심 내용을 머릿속으로 요약하기",
+            post: "틀린 문제는 해설지보다 먼저 지문에서 스스로 정답의 근거 찾아보기"
         }
     }
 };
@@ -128,6 +141,9 @@ const STRENGTH_STRATEGIES: Record<string, string> = {
     '세부내용': "정보를 정확하게 파악하는 눈이 날카롭습니다. 이제는 나무보다 숲을 보는 연습(구조 파악)을 병행한다면 독해 속도와 정확도를 동시에 잡을 수 있습니다.",
     '어휘': "탄탄한 어휘력은 독해의 강력한 무기입니다. 풍부한 어휘력을 바탕으로 고급 지문(철학, 경제 등)에 도전하여 배경지식을 넓혀보세요.",
     '구조': "글의 구조를 파악하는 논리력이 뛰어납니다. 이 논리력을 바탕으로 추론 문제에서 정답의 근거를 논리적으로 도출하는 연습을 더해보세요.",
+    '작품이해': "문학적 감수성과 작품 분석력이 뛰어납니다. 다양한 낯선 작품들을 접해보며 감상 능력을 더욱 확장시킨다면 문학은 가장 든든한 효자 과목이 될 것입니다.",
+    '비판': "비판적 사고력이 돋보입니다. 필자의 관점을 수용하는 것을 넘어 타당성을 검토하는 상위인지 능력을 십분 발휘해 보세요.",
+    '적용': "배운 내용을 새로운 상황에 응용하는 유연한 사고를 가졌습니다. 고난도 융합 지문이나 <보기> 문제에서도 강한 자신감을 가져도 좋습니다.",
     'default': "현재의 강점을 바탕으로 자신감을 가지세요! 강점 영역에서 얻은 성취감을 약점 영역 극복의 에너지로 삼아 꾸준히 학습하는 것이 중요합니다."
 };
 
@@ -204,11 +220,14 @@ export function generateInsight(data: SummaryData): InsightResult | null {
     if (!worstItem) return null;
 
     const worstName = worstItem.q_type || worstItem.area || 'Unknown';
-    const lookupName = Object.keys(DIAGNOSIS_DB).find(k => k === worstName) || (Object.keys(DIAGNOSIS_DB).includes(worstName) ? worstName : 'Reading'); // Fallback to Reading/Gen
+    // Normalize: Remove spaces for lookup (e.g., '작품 이해' -> '작품이해')
+    const normalizedWorstName = worstName.replace(/\s+/g, '');
+
+    // Find key in DIAGNOSIS_DB matching normalized name
+    const lookupName = Object.keys(DIAGNOSIS_DB).find(k => k === normalizedWorstName) ||
+        (Object.keys(DIAGNOSIS_DB).includes(normalizedWorstName) ? normalizedWorstName : 'Reading');
 
     const dbEntry = DIAGNOSIS_DB[lookupName] || DIAGNOSIS_DB['Reading'];
-    // Randomize or Select all causes? Request says "Detail cause hypothesis". 
-    // Let's return all causes as bullet points.
 
 
     // 2. Identify Strength
@@ -233,9 +252,10 @@ export function generateInsight(data: SummaryData): InsightResult | null {
     }
 
     const strengthName = bestItem ? (bestItem.area || bestItem.q_type || bestItem.name) : '종합';
-    // Clean up name (remove "Reading" / "Vocabulary" prefix if redundant?) - Keep as is.
+    // Normalize: Remove spaces
+    const normalizedStrengthName = strengthName.replace(/\s+/g, '');
 
-    const strengthKey = Object.keys(STRENGTH_STRATEGIES).find(k => strengthName.includes(k)) || 'default';
+    const strengthKey = Object.keys(STRENGTH_STRATEGIES).find(k => normalizedStrengthName.includes(k)) || 'default';
     const strengthStrategy = STRENGTH_STRATEGIES[strengthKey];
 
 
